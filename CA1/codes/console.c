@@ -237,8 +237,26 @@ consoleintr(int (*getc)(void))
       break;
 
     case C('A'):
-      doprocdump = 1;
-      break;
+      if(input.e>0 && input.buf[(input.e - 1) % INPUT_BUF] == ' '){
+        consputc(KEY_LF,0);
+        input.e--;
+      }
+
+      while(input.e>0 && input.buf[input.e % INPUT_BUF] == ' '){
+        consputc(KEY_LF,0);
+        input.e--;
+      }
+
+      while(input.e>0 && input.buf[(input.e - 1) % INPUT_BUF] !=' '){
+
+          consputc(KEY_LF,0);
+          input.e--;
+      }
+
+
+
+
+     break;
 
 
     case C('P'):
