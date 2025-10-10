@@ -123,7 +123,7 @@ panic(char *s)
 static ushort *crt = (ushort*)P2V(0xb8000);
 
 static void
-cgaputc(int c, int k)
+cgaputc(int c)
 {
   int pos;
 
@@ -149,10 +149,9 @@ cgaputc(int c, int k)
   } 
   
   else if(c == KEY_RT){
-    if(pos % 80 < 79){
-      crt[pos++] = (k&0xff) | 0x0700;
-    }
-  } 
+    if(pos % 80 < 79)
+      ++pos;
+  }
   
   else {
     crt[pos++] = (c&0xff) | 0x0700;
@@ -199,7 +198,7 @@ consputc(int c, int k)
     uartputc(c);
   }
 
-  cgaputc(c, k);
+  cgaputc(c);
 }
 
 #define INPUT_BUF 128
@@ -221,6 +220,27 @@ consoleintr(int (*getc)(void))
   acquire(&cons.lock);
   while((c = getc()) >= 0){
     switch(c){
+    case C('D'):
+      while(input.e < input.real_end && input.buf[input.e % INPUT_BUF] != ' ' && input.buf[input.e % INPUT_BUF] != '\n'){
+        char ch = input.buf[input.e % INPUT_BUF];
+        consputc(KEY_RT, ch);
+        input.e++;
+      }
+
+      while(input.e < input.real_end && input.buf[input.e % INPUT_BUF] == ' ' && input.buf[input.e % INPUT_BUF] != '\n'){
+        char ch = input.buf[input.e % INPUT_BUF];
+        consputc(KEY_RT, ch);
+        input.e++;
+      }
+
+
+      break;
+
+    case C('A'):
+      doprocdump = 1;
+      break;
+
+
     case C('P'):
       doprocdump = 1;
       break;
@@ -283,7 +303,7 @@ consoleintr(int (*getc)(void))
     default:
       if(input.e < input.real_end){
         if(c != 0 && input.real_end-input.r < INPUT_BUF){
-          if(c != '\n' && c != C('D')){
+          if(c != '\n'){
             for (int i = (int)input.real_end - 1; i >= (int)input.e; i--)
               input.buf[(i + 1) % INPUT_BUF] = input.buf[i % INPUT_BUF];
 
@@ -301,16 +321,17 @@ consoleintr(int (*getc)(void))
               consputc(KEY_LF, 0);
           }
 
-          if(c == '\n' || c == C('D') || input.real_end == input.r+INPUT_BUF){
+          if(c == '\n' || input.real_end == input.r+INPUT_BUF){
             input.e = input.real_end;
             if (c == '\n') {
               input.buf[input.e++ % INPUT_BUF] = '\n';
               input.real_end = input.e;
               consputc('\n', 0);
-            } else if (c == C('D')) {
-              input.buf[input.e++ % INPUT_BUF] = C('D');
-              input.real_end = input.e;
-            }
+            } 
+            // else if (c == C('D')) {
+            //   input.buf[input.e++ % INPUT_BUF] = C('D');
+            //   input.real_end = input.e;
+            // }
             input.w = input.e;
             wakeup(&input.r);
           }
@@ -327,7 +348,7 @@ consoleintr(int (*getc)(void))
 
           consputc(c, 0);
 
-          if(c == '\n' || c == C('D') || input.real_end == input.r+INPUT_BUF){
+          if(c == '\n' || input.real_end == input.r+INPUT_BUF){
             input.w = input.e;
             input.real_end = input.e;
             wakeup(&input.r);
@@ -364,12 +385,12 @@ consoleread(struct inode *ip, char *dst, int n)
       sleep(&input.r, &cons.lock);
     }
     c = input.buf[input.r++ % INPUT_BUF];
-    if(c == C('D')){
-      if(n < target){
-        input.r--;
-      }
-      break;
-    }
+    // if(c == C('D')){
+    //   if(n < target){
+    //     input.r--;
+    //   }
+    //   break;
+    // }
     *dst++ = c;
     --n;
     if(c == '\n')
