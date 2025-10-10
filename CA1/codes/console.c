@@ -148,9 +148,9 @@ cgaputc(int c)
       --pos;
   } 
   
-  else if(c == KEY_RT){
-    if(pos % 80 < 79)
-      ++pos;
+  else if (c == KEY_RT) {
+    if (pos < 25*80 - 1)
+      ++pos;       
   }
   
   else {
