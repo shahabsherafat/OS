@@ -14,6 +14,9 @@
 #define KEY_LF 0xE4
 #define KEY_RT 0xE5
 
+static ushort cg_attr = 0x0700;
+
+
 static void consputc(int, int);
 
 static int panicked = 0;
@@ -22,6 +25,36 @@ static struct {
   struct spinlock lock;
   int locking;
 } cons;
+
+#define INPUT_BUF 128
+struct {
+  char buf[INPUT_BUF];
+  uint r;
+  uint w;
+  uint e;
+  uint real_end;
+  int insert_order[INPUT_BUF];
+  int current_time;
+  int sel_a;   // نقطه‌ی اول (anchor) یا -1
+  int sel_b;   // نقطه‌ی دوم (active end) یا -1
+
+  // کلیپ‌بورد
+  char clip[INPUT_BUF];
+  int  clip_len;
+} input;
+
+static inline int has_selection(void) {
+  return (input.sel_a >= 0 && input.sel_b >= 0 && input.sel_a != input.sel_b);
+}
+static inline void clear_selection(void) {
+  input.sel_a = input.sel_b = -1;
+}
+static inline void sel_bounds(int *lo, int *hi) {
+  int a = input.sel_a, b = input.sel_b;
+  if (a > b) { int t=a; a=b; b=t; }
+  *lo = a; *hi = b;
+}
+
 
 static void
 printint(int xx, int base, int sign)
@@ -150,7 +183,7 @@ cgaputc(int c)
       ++pos;       
   }
   else {
-    crt[pos++] = (c&0xff) | 0x0700;
+    crt[pos++] = (c & 0xff) | cg_attr;
     crt[pos]   = ' ' | 0x0700;
   }
 
@@ -194,21 +227,44 @@ consputc(int c, int k)
   cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-  char buf[INPUT_BUF];
-  uint r;
-  uint w;
-  uint e;
-  uint real_end;
-  int insert_order[INPUT_BUF];
-  int current_time;
-} input;
-
 #define C(x)  ((x)-'@')
 
 static int
 min_int(int a, int b) { return a < b ? a : b; }
+
+
+static void redraw_edit_with_selection(void) {
+  int old_e = (int)input.e;
+  int len   = (int)input.real_end - (int)input.w;
+  if (len < 0) len = 0;
+
+  int off_from_start = old_e - (int)input.w;
+  if (off_from_start < 0) off_from_start = 0;
+  for (int i = 0; i < off_from_start; i++)
+    consputc(KEY_LF, 0);
+
+  int lo = -1, hi = -1;
+  int sel = 0;
+  if (input.sel_a >= 0 && input.sel_b >= 0 && input.sel_a != input.sel_b) {
+    lo = input.sel_a; hi = input.sel_b;
+    if (lo > hi) { int t = lo; lo = hi; hi = t; }
+    sel = 1;
+  }
+
+  for (int i = 0; i < len; i++) {
+    int idx = (int)input.w + i;
+    int in_sel = sel && idx >= lo && idx < hi;
+    ushort prev = cg_attr;
+    cg_attr = in_sel ? 0x7000 : 0x0700;
+    consputc(input.buf[idx % INPUT_BUF], 0);
+    cg_attr = prev;
+  }
+
+  int back = len - off_from_start;
+  for (int i = 0; i < back; i++)
+    consputc(KEY_LF, 0);
+}
+
 
 void
 consoleintr(int (*getc)(void))
@@ -413,6 +469,24 @@ consoleintr(int (*getc)(void))
       break;
     }
 
+case C('S'):
+  if (input.sel_a < 0) {
+    input.sel_a = (int)input.e;
+    break;
+  }
+  if (input.sel_b < 0) {
+    input.sel_b = (int)input.e;
+    if (input.sel_b == input.sel_a) { clear_selection(); break; }
+    redraw_edit_with_selection();
+    break;
+  }
+  input.sel_b = (int)input.e;
+  if (input.sel_b == input.sel_a) { clear_selection(); break; }
+  redraw_edit_with_selection();
+  break;
+
+
+
     default:
       if(input.e < input.real_end){
         if(c != 0 && input.real_end-input.r < INPUT_BUF){
@@ -517,4 +591,6 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
   ioapicenable(IRQ_KBD, 0);
+  input.sel_a = input.sel_b = -1;
+  input.clip_len = 0;
 }
