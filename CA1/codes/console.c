@@ -135,24 +135,20 @@ cgaputc(int c)
   if(c == '\n'){
     pos += 80 - pos%80;
   } 
-  
   else if(c == BACKSPACE){
     if(pos > 0){
       --pos;
       crt[pos] = ' ' | 0x0700;
     }
   } 
-  
   else if(c == KEY_LF){
     if(pos > 0)
       --pos;
   } 
-  
   else if (c == KEY_RT) {
     if (pos < 25*80 - 1)
       ++pos;       
   }
-  
   else {
     crt[pos++] = (c&0xff) | 0x0700;
     crt[pos]   = ' ' | 0x0700;
@@ -185,15 +181,12 @@ consputc(int c, int k)
   if(c == BACKSPACE){
     uartputc('\b'); uartputc(' '); uartputc('\b');
   } 
-  
   else if(c == KEY_LF){
     uartputc('\b');
   } 
-  
   else if(c == KEY_RT){
     uartputc(k);
   } 
-  
   else {
     uartputc(c);
   }
@@ -208,9 +201,14 @@ struct {
   uint w;
   uint e;
   uint real_end;
+  int insert_order[INPUT_BUF];
+  int current_time;
 } input;
 
 #define C(x)  ((x)-'@')
+
+static int
+min_int(int a, int b) { return a < b ? a : b; }
 
 void
 consoleintr(int (*getc)(void))
@@ -220,89 +218,109 @@ consoleintr(int (*getc)(void))
   acquire(&cons.lock);
   while((c = getc()) >= 0){
     switch(c){
+
+    // Jump right by word
     case C('D'):
       while(input.e < input.real_end && input.buf[input.e % INPUT_BUF] != ' ' && input.buf[input.e % INPUT_BUF] != '\n'){
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
-
       while(input.e < input.real_end && input.buf[input.e % INPUT_BUF] == ' ' && input.buf[input.e % INPUT_BUF] != '\n'){
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
-
-
       break;
 
+    // Jump left by word
     case C('A'):
       if(input.e>0 && input.buf[(input.e - 1) % INPUT_BUF] == ' '){
         consputc(KEY_LF,0);
         input.e--;
       }
-
       while(input.e>0 && input.buf[input.e % INPUT_BUF] == ' '){
         consputc(KEY_LF,0);
         input.e--;
       }
-
       while(input.e>0 && input.buf[(input.e - 1) % INPUT_BUF] !=' '){
-
-          consputc(KEY_LF,0);
-          input.e--;
+        consputc(KEY_LF,0);
+        input.e--;
       }
-
-
-
-
-     break;
-
+      break;
 
     case C('P'):
       doprocdump = 1;
       break;
 
-    case C('U'):
+    // Clear line
+    case C('U'): {
       while(input.e != input.w &&
             input.buf[(input.e-1) % INPUT_BUF] != '\n'){
         input.e--;
         consputc(BACKSPACE, 0);
       }
       input.real_end = input.e;
+      input.current_time = 0;
       break;
+    }
 
+    // Backspace
     case C('H'):
-    case '\x7f':
+    case '\x7f': {
       if (input.e != input.w) {
         if (input.e == input.real_end) {
+          // simple case: at end, just backspace normally
           input.e--;
           input.real_end--;
           consputc(BACKSPACE, 0);
-        } 
-        
-        else {
-          input.e--;
+        } else {
+          // deletion in the middle -> update buffer & timestamps, then robust redraw
+          int old_e = (int)input.e;
+          int old_real_end = (int)input.real_end;
+          int old_len = old_real_end - (int)input.w;
+          if (old_len < 0) old_len = 0;
 
-          for (uint i = input.e; i < input.real_end - 1; i++)
+          // remove character just before cursor
+          input.e--; // move edit pointer left (we delete char at this position)
+          // shift left starting from input.e to real_end-1
+          for (uint i = input.e; i < input.real_end - 1; i++) {
             input.buf[i % INPUT_BUF] = input.buf[(i + 1) % INPUT_BUF];
-
+            input.insert_order[i % INPUT_BUF] = input.insert_order[(i + 1) % INPUT_BUF];
+          }
           input.real_end--;
+          if (input.e > input.real_end) input.e = input.real_end;
 
-          consputc(KEY_LF, 0);
+          // now redraw entire editable region cleanly
+          int new_len = (int)input.real_end - (int)input.w;
+          if (new_len < 0) new_len = 0;
+          int old_cursor_off = old_e - (int)input.w;
+          if (old_cursor_off < 0) old_cursor_off = 0;
+          int new_cursor_off = (int)input.e - (int)input.w;
+          if (new_cursor_off < 0) new_cursor_off = 0;
 
-          for (uint i = input.e; i < input.real_end; i++)
-            consputc(input.buf[i % INPUT_BUF], 0);
+          // 1) move to start of editable region
+          for (int i = 0; i < old_cursor_off; i++) consputc(KEY_LF, 0);
 
-          consputc(' ', 0);
-          
-          for (uint k = input.e; k <= input.real_end; k++)
-            consputc(KEY_LF, 0);
+          // 2) erase old content by overwriting with spaces (limit to 80 to avoid scrolling)
+          for (int i = 0; i < min_int(old_len, 80); i++) consputc(' ', 0);
+
+          // 3) move back to start
+          for (int i = 0; i < min_int(old_len, 80); i++) consputc(KEY_LF, 0);
+
+          // 4) print new content
+          for (int i = 0; i < new_len; i++)
+            consputc(input.buf[(input.w + i) % INPUT_BUF], 0);
+
+          // 5) move cursor to new_cursor_off
+          int moves_left = new_len - new_cursor_off;
+          for (int i = 0; i < moves_left; i++) consputc(KEY_LF, 0);
         }
       }
       break;
+    }
 
-
+    // Move left
     case KEY_LF:
       if (input.e > input.w){
         input.e--;
@@ -310,6 +328,7 @@ consoleintr(int (*getc)(void))
       }
       break;
 
+    // Move right
     case KEY_RT:
       if (input.e < input.real_end){
         char ch = input.buf[input.e % INPUT_BUF];
@@ -318,54 +337,119 @@ consoleintr(int (*getc)(void))
       }
       break;
 
+    // === Ctrl+Z: delete last inserted char (time-based) ===
+    case C('Z'): {
+      if (input.real_end > input.w) {
+        int max_t = -1, idx = -1;
+        // find index of last inserted char
+        for (uint i = input.w; i < input.real_end; i++) {
+          int t = input.insert_order[i % INPUT_BUF];
+          if (t > max_t) {
+            max_t = t;
+            idx = (int)i;
+          }
+        }
+        if (idx >= 0) {
+          int old_e = (int)input.e;
+          int old_real_end = (int)input.real_end;
+          int old_len = old_real_end - (int)input.w;
+          if (old_len < 0) old_len = 0;
+
+          // shift buffer & timestamps left from idx
+          for (int i = idx; i < old_real_end - 1; i++) {
+            input.buf[i % INPUT_BUF] = input.buf[(i + 1) % INPUT_BUF];
+            input.insert_order[i % INPUT_BUF] = input.insert_order[(i + 1) % INPUT_BUF];
+          }
+          input.real_end--;
+          // adjust edit pointer if it was after the deleted char
+          if ((int)input.e > idx) 
+              input.e--;
+
+          if (input.e < input.w) 
+              input.e = input.w;
+
+          if (input.e > input.real_end) 
+              input.e = input.real_end;
+
+          // new length and offsets
+          int new_len = (int)input.real_end - (int)input.w;
+
+          if (new_len < 0) 
+              new_len = 0;
+
+          int old_cursor_off = old_e - (int)input.w;
+
+          if (old_cursor_off < 0) 
+              old_cursor_off = 0;
+
+          int new_cursor_off = (int)input.e - (int)input.w;
+
+          if (new_cursor_off < 0) 
+              new_cursor_off = 0;
+
+          // 1) move to start of editable region (from old cursor)
+          for (int i = 0; i < old_cursor_off; i++) 
+              consputc(KEY_LF, 0);
+
+          // 2) erase old content by overwriting with spaces (cap to 80)
+          for (int i = 0; i < min_int(old_len, 80); i++) 
+              consputc(' ', 0);
+
+          // 3) move back to start
+          for (int i = 0; i < min_int(old_len, 80); i++) 
+              consputc(KEY_LF, 0);
+
+          // 4) print new content
+          for (int i = 0; i < new_len; i++)
+              consputc(input.buf[(input.w + i) % INPUT_BUF], 0);
+
+          // 5) move cursor to new_cursor_off
+          int moves_left = new_len - new_cursor_off;
+
+          for (int i = 0; i < moves_left; i++) 
+              consputc(KEY_LF, 0);
+        }
+      }
+      break;
+    }
+
     default:
       if(input.e < input.real_end){
         if(c != 0 && input.real_end-input.r < INPUT_BUF){
           if(c != '\n'){
-            for (int i = (int)input.real_end - 1; i >= (int)input.e; i--)
+            for (int i = (int)input.real_end - 1; i >= (int)input.e; i--) {
               input.buf[(i + 1) % INPUT_BUF] = input.buf[i % INPUT_BUF];
-
-            input.buf[input.e] = c;
-            
+              input.insert_order[(i + 1) % INPUT_BUF] = input.insert_order[i % INPUT_BUF];
+            }
+            input.buf[input.e % INPUT_BUF] = c;
+            input.insert_order[input.e % INPUT_BUF] = ++input.current_time;
             input.real_end++;
-
             consputc(c, 0);
             input.e++;
-
             for (uint i = input.e; i < input.real_end; i++)
               consputc(input.buf[i % INPUT_BUF], 0);
-            
             for (uint k = input.e; k < input.real_end; k++)
               consputc(KEY_LF, 0);
           }
-
           if(c == '\n' || input.real_end == input.r+INPUT_BUF){
             input.e = input.real_end;
             if (c == '\n') {
               input.buf[input.e++ % INPUT_BUF] = '\n';
               input.real_end = input.e;
               consputc('\n', 0);
-            } 
-            // else if (c == C('D')) {
-            //   input.buf[input.e++ % INPUT_BUF] = C('D');
-            //   input.real_end = input.e;
-            // }
+            }
             input.w = input.e;
             wakeup(&input.r);
           }
-
         }
       }
-
       else{
         if(c != 0 && input.real_end-input.r < INPUT_BUF){
           c = (c == '\r') ? '\n' : c;
           input.buf[input.e++ % INPUT_BUF] = c;
-          
+          input.insert_order[(input.e-1) % INPUT_BUF] = ++input.current_time;
           if (input.e > input.real_end) input.real_end = input.e;
-
           consputc(c, 0);
-
           if(c == '\n' || input.real_end == input.r+INPUT_BUF){
             input.w = input.e;
             input.real_end = input.e;
@@ -373,15 +457,13 @@ consoleintr(int (*getc)(void))
           }
         }
       }
-      
-    break;
+      break;
     }
   }
-  
+
   release(&cons.lock);
-  if(doprocdump) {
+  if(doprocdump)
     procdump();
-  }
 }
 
 int
@@ -403,12 +485,6 @@ consoleread(struct inode *ip, char *dst, int n)
       sleep(&input.r, &cons.lock);
     }
     c = input.buf[input.r++ % INPUT_BUF];
-    // if(c == C('D')){
-    //   if(n < target){
-    //     input.r--;
-    //   }
-    //   break;
-    // }
     *dst++ = c;
     --n;
     if(c == '\n')
@@ -416,7 +492,6 @@ consoleread(struct inode *ip, char *dst, int n)
   }
   release(&cons.lock);
   ilock(ip);
-
   return target - n;
 }
 
@@ -431,7 +506,6 @@ consolewrite(struct inode *ip, char *buf, int n)
     consputc(buf[i] & 0xff, 0);
   release(&cons.lock);
   ilock(ip);
-
   return n;
 }
 
@@ -439,10 +513,8 @@ void
 consoleinit(void)
 {
   initlock(&cons.lock, "console");
-
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
-
   ioapicenable(IRQ_KBD, 0);
 }
