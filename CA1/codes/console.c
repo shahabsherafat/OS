@@ -36,8 +36,9 @@ struct
   uint real_end;
   int insert_order[INPUT_BUF];
   int current_time;
-  int sel_a;
-  int sel_b;
+  int sel_a; // نقطه‌ی اول (anchor) یا -1
+  int sel_b; // نقطه‌ی دوم (active end) یا -1
+  // کلیپ‌بورد
   char clip[INPUT_BUF];
   int clip_len;
 } input;
@@ -294,7 +295,7 @@ static int insert_at(int pos, const char *src, int n)
   {
     char ch = src[wrote];
     if (ch == '\n')
-      break;
+      break; // اجازه‌ی newline نده
     input.buf[(pos + wrote) % INPUT_BUF] = ch;
     input.insert_order[(pos + wrote) % INPUT_BUF] = ++input.current_time;
   }
@@ -356,22 +357,68 @@ static void full_redraw_after_edit(uint old_e)
   if (old_cursor_off < 0)
     old_cursor_off = 0;
 
+  // 1) go to start of editable region from old cursor
   for (int i = 0; i < old_cursor_off; i++)
     consputc(KEY_LF, 0);
 
+  // 2) wipe previous visual content (cap to 80 to avoid scroll)
   for (int i = 0; i < min_int(old_len, 80); i++)
     consputc(' ', 0);
   for (int i = 0; i < min_int(old_len, 80); i++)
     consputc(KEY_LF, 0);
 
+  // 3) print fresh content (no selection highlighting)
   for (int i = 0; i < old_len; i++)
     consputc(input.buf[(input.w + i) % INPUT_BUF], 0);
 
+  // 4) move caret to input.e
   int new_cursor_off = (int)input.e - (int)input.w;
   int moves_left = old_len - new_cursor_off;
   for (int i = 0; i < moves_left; i++)
     consputc(KEY_LF, 0);
 }
+
+static void full_redraw_after_edit_len(uint old_e, int old_len_before)
+{
+  if (old_len_before < 0)
+    old_len_before = 0;
+
+  int old_cursor_off = (int)old_e - (int)input.w;
+  if (old_cursor_off < 0)
+    old_cursor_off = 0;
+
+  // 1) move to start of editable region from old cursor
+  for (int i = 0; i < old_cursor_off; i++)
+    consputc(KEY_LF, 0);
+
+  // 2) wipe previous visual content (use the *old* length, cap to 80)
+  int wipe = min_int(old_len_before, 80);
+  for (int i = 0; i < wipe; i++)
+    consputc(' ', 0);
+  for (int i = 0; i < wipe; i++)
+    consputc(KEY_LF, 0);
+
+  // 3) print fresh content (using the *new* buffer)
+  int new_len = (int)input.real_end - (int)input.w;
+  if (new_len < 0)
+    new_len = 0;
+  for (int i = 0; i < new_len; i++)
+    consputc(input.buf[(input.w + i) % INPUT_BUF], 0);
+
+  // 4) move caret to input.e (based on *new* state)
+  int new_cursor_off = (int)input.e - (int)input.w;
+  if (new_cursor_off < 0)
+    new_cursor_off = 0;
+  int moves_left = new_len - new_cursor_off;
+  for (int i = 0; i < moves_left; i++)
+    consputc(KEY_LF, 0);
+}
+
+// static void deselect_and_full_redraw(void){
+//   uint old_e = input.e;
+//   clear_selection();
+//   full_redraw_after_edit(old_e);
+// }
 
 static inline void deselect_and_redraw_if_any(void)
 {
@@ -388,10 +435,11 @@ static void replace_selection_with(const char *src, int n)
   int lo, hi;
   sel_bounds(&lo, &hi);
   uint old_e = input.e;
+  int old_len = (int)input.real_end - (int)input.w;
   delete_range(lo, hi);
   insert_at(lo, src, n);
   clear_selection();
-  full_redraw_after_edit(old_e);
+  full_redraw_after_edit_len(old_e, old_len);
 }
 
 void consoleintr(int (*getc)(void))
@@ -469,11 +517,14 @@ void consoleintr(int (*getc)(void))
       if (has_selection())
       {
         uint old_e = input.e;
+        int old_len = (int)input.real_end - (int)input.w; // BEFORE delete
         int lo, hi;
         sel_bounds(&lo, &hi);
+
         delete_range(lo, hi);
         clear_selection();
-        full_redraw_after_edit(old_e);
+
+        full_redraw_after_edit_len(old_e, old_len);
         break;
       }
       if (input.e != input.w)
@@ -591,6 +642,7 @@ void consoleintr(int (*getc)(void))
       else
       {
         uint old_e = input.e;
+        int old_len = (int)input.real_end - (int)input.w;
         int was_end = (input.e == input.real_end);
         int wrote = insert_at((int)input.e, input.clip, input.clip_len);
         clear_selection(); // spec: return to normal mode
@@ -599,7 +651,7 @@ void consoleintr(int (*getc)(void))
           break;
         if (!was_end)
         {
-          full_redraw_after_edit(old_e); // content after caret shifted
+          full_redraw_after_edit_len(old_e, old_len); // content after caret shifted
         }
         else
         {
@@ -727,6 +779,19 @@ void consoleintr(int (*getc)(void))
     }
 
     default:
+      if (has_selection())
+      {
+        unsigned char ch = (unsigned char)c;
+
+        // Printable ASCII (space..tilde), not DEL
+        if (ch >= 32 && ch != 0x7f)
+        {
+          char one[1] = {(char)ch};
+          replace_selection_with(one, 1); // handles delete+insert+redraw+deselect
+        }
+        // For control/non-printables do nothing here (explicit cases handle deselect).
+        break; // IMPORTANT: do not fall through to normal typing path
+      }
       if (input.e < input.real_end)
       {
         if (c != 0 && input.real_end - input.r < INPUT_BUF)
