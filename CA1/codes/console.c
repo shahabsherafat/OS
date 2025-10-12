@@ -413,6 +413,14 @@ consoleintr(int (*getc)(void))
     case C('H'):
     
     case '\x7f': {
+        if (has_selection()){
+          uint old_e = input.e;
+          int lo, hi; sel_bounds(&lo, &hi);
+          delete_range(lo, hi);  
+          clear_selection();            
+          full_redraw_after_edit(old_e); 
+          break;
+        }
       if (input.e != input.w) {
         if (input.e == input.real_end) {
           // simple case: at end, just backspace normally
