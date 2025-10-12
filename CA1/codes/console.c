@@ -37,7 +37,6 @@ struct {
   int current_time;
   int sel_a;   // نقطه‌ی اول (anchor) یا -1
   int sel_b;   // نقطه‌ی دوم (active end) یا -1
-
   // کلیپ‌بورد
   char clip[INPUT_BUF];
   int  clip_len;
@@ -232,6 +231,44 @@ consputc(int c, int k)
 static int
 min_int(int a, int b) { return a < b ? a : b; }
 
+static void delete_range(int lo, int hi){
+  if (hi <= lo) return;
+  int deln = hi - lo;
+  for (int i = hi; i < (int)input.real_end; i++){
+    input.buf[(i - deln) % INPUT_BUF]          = input.buf[i % INPUT_BUF];
+    input.insert_order[(i - deln) % INPUT_BUF] = input.insert_order[i % INPUT_BUF];
+  }
+  input.real_end -= deln;
+  if (input.e > hi)       input.e -= deln;
+  else if (input.e > lo)  input.e  = lo;
+  if (input.e < input.w)  input.e  = input.w;
+}
+
+static int insert_at(int pos, const char *src, int n){
+  if (n <= 0) return 0;
+  int inuse = (int)input.real_end - (int)input.r;
+  int free  = INPUT_BUF - inuse;
+  if (free <= 0) return 0;
+  if (n > free) n = free;
+
+  for (int i = (int)input.real_end - 1; i >= pos; --i){
+    input.buf[(i + n) % INPUT_BUF]          = input.buf[i % INPUT_BUF];
+    input.insert_order[(i + n) % INPUT_BUF] = input.insert_order[i % INPUT_BUF];
+  }
+  int wrote = 0;
+  for (; wrote < n; ++wrote){
+    char ch = src[wrote];
+    if (ch == '\n') break; // اجازه‌ی newline نده
+    input.buf[(pos + wrote) % INPUT_BUF]          = ch;
+    input.insert_order[(pos + wrote) % INPUT_BUF] = ++input.current_time;
+  }
+  input.real_end += wrote;
+  input.e = pos + wrote;
+  return wrote;
+}
+
+
+
 
 static void redraw_edit_with_selection(void) {
   int old_e = (int)input.e;
@@ -266,6 +303,53 @@ static void redraw_edit_with_selection(void) {
 }
 
 
+static void full_redraw_after_edit(uint old_e){
+  int old_len = (int)input.real_end - (int)input.w;
+  if (old_len < 0) old_len = 0;
+
+  int old_cursor_off = (int)old_e - (int)input.w;
+  if (old_cursor_off < 0) old_cursor_off = 0;
+
+  // 1) go to start of editable region from old cursor
+  for (int i = 0; i < old_cursor_off; i++) consputc(KEY_LF, 0);
+
+  // 2) wipe previous visual content (cap to 80 to avoid scroll)
+  for (int i = 0; i < min_int(old_len, 80); i++) consputc(' ', 0);
+  for (int i = 0; i < min_int(old_len, 80); i++) consputc(KEY_LF, 0);
+
+  // 3) print fresh content (no selection highlighting)
+  for (int i = 0; i < old_len; i++)
+    consputc(input.buf[(input.w + i) % INPUT_BUF], 0);
+
+  // 4) move caret to input.e
+  int new_cursor_off = (int)input.e - (int)input.w;
+  int moves_left = old_len - new_cursor_off;
+  for (int i = 0; i < moves_left; i++) consputc(KEY_LF, 0);
+}
+
+// static void deselect_and_full_redraw(void){
+//   uint old_e = input.e;
+//   clear_selection();
+//   full_redraw_after_edit(old_e);
+// }
+
+static inline void deselect_and_redraw_if_any(void){
+  if (has_selection()){
+    uint old_e = input.e;
+    clear_selection();
+    full_redraw_after_edit(old_e);
+  }
+}
+
+static void replace_selection_with(const char *src, int n){
+  int lo, hi; sel_bounds(&lo, &hi);
+  uint old_e = input.e;
+  delete_range(lo, hi);
+  insert_at(lo, src, n);
+  clear_selection();
+  full_redraw_after_edit(old_e);
+}
+
 void
 consoleintr(int (*getc)(void))
 {
@@ -277,6 +361,7 @@ consoleintr(int (*getc)(void))
 
     // Jump right by word
     case C('D'):
+      deselect_and_redraw_if_any();
       while(input.e < input.real_end && input.buf[input.e % INPUT_BUF] != ' ' && input.buf[input.e % INPUT_BUF] != '\n'){
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
@@ -291,6 +376,7 @@ consoleintr(int (*getc)(void))
 
     // Jump left by word
     case C('A'):
+      deselect_and_redraw_if_any();
       if(input.e>0 && input.buf[(input.e - 1) % INPUT_BUF] == ' '){
         consputc(KEY_LF,0);
         input.e--;
@@ -306,11 +392,13 @@ consoleintr(int (*getc)(void))
       break;
 
     case C('P'):
+    deselect_and_redraw_if_any();
       doprocdump = 1;
       break;
 
     // Clear line
     case C('U'): {
+
       while(input.e != input.w &&
             input.buf[(input.e-1) % INPUT_BUF] != '\n'){
         input.e--;
@@ -323,6 +411,7 @@ consoleintr(int (*getc)(void))
 
     // Backspace
     case C('H'):
+    
     case '\x7f': {
       if (input.e != input.w) {
         if (input.e == input.real_end) {
@@ -378,6 +467,7 @@ consoleintr(int (*getc)(void))
 
     // Move left
     case KEY_LF:
+    deselect_and_redraw_if_any();
       if (input.e > input.w){
         input.e--;
         consputc(KEY_LF, 0);
@@ -386,15 +476,53 @@ consoleintr(int (*getc)(void))
 
     // Move right
     case KEY_RT:
+    deselect_and_redraw_if_any();
       if (input.e < input.real_end){
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
       break;
+    case C('C'): { // Copy
+      if (has_selection()){
+        int lo, hi; sel_bounds(&lo, &hi);
+        int n = hi - lo;
+        if (n > INPUT_BUF) n = INPUT_BUF;
+        for (int i = 0; i < n; ++i)
+          input.clip[i] = input.buf[(lo + i) % INPUT_BUF];
+        input.clip_len = n;
+        // طبق مشخصات: انتخاب باید باقی بماند؛ نیازی به redraw نیست
+      }
+      break;
+    }
+
+    case C('V'): {  // Paste
+    if (input.clip_len <= 0) break;      // nothing to paste
+
+    if (has_selection()){
+      replace_selection_with(input.clip, input.clip_len);
+    } else {
+      uint old_e = input.e;
+      int was_end = (input.e == input.real_end);
+      int wrote = insert_at((int)input.e, input.clip, input.clip_len);
+      clear_selection();                  // spec: return to normal mode
+
+      if (wrote <= 0) break;
+      if (!was_end) {
+        full_redraw_after_edit(old_e);    // content after caret shifted
+      } else {
+        // Fast path: appended at end → just print what was added
+        for (int i = 0; i < wrote; ++i)
+          consputc(input.buf[(input.e - wrote + i) % INPUT_BUF], 0);
+      }
+    }
+    break;
+  }
+
 
     // === Ctrl+Z: delete last inserted char (time-based) ===
     case C('Z'): {
+      deselect_and_redraw_if_any();
       if (input.real_end > input.w) {
         int max_t = -1, idx = -1;
         // find index of last inserted char
@@ -469,21 +597,32 @@ consoleintr(int (*getc)(void))
       break;
     }
 
-case C('S'):
-  if (input.sel_a < 0) {
-    input.sel_a = (int)input.e;
-    break;
-  }
-  if (input.sel_b < 0) {
-    input.sel_b = (int)input.e;
-    if (input.sel_b == input.sel_a) { clear_selection(); break; }
-    redraw_edit_with_selection();
-    break;
-  }
-  input.sel_b = (int)input.e;
-  if (input.sel_b == input.sel_a) { clear_selection(); break; }
-  redraw_edit_with_selection();
-  break;
+    case C('S'): {
+      // If a selection exists, Ctrl+S toggles it OFF.
+      if (has_selection()){
+        uint old_e = input.e;
+        clear_selection();
+        full_redraw_after_edit(old_e);   // remove highlight
+        break;
+      }
+
+      // No selection yet:
+      if (input.sel_a < 0) {             // 1st Ctrl+S → set anchor
+        input.sel_a = (int)input.e;
+        break;
+      }
+
+      // Anchor exists but no active end:
+      input.sel_b = (int)input.e;         // 2nd Ctrl+S → set active end
+      if (input.sel_b == input.sel_a) {
+        clear_selection();                // zero-length → no selection
+      } else {
+        redraw_edit_with_selection();     // show highlight
+      }
+      break;
+    }
+
+
 
 
 
