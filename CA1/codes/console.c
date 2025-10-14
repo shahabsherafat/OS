@@ -778,6 +778,17 @@ void consoleintr(int (*getc)(void))
       break;
     }
 
+    case '\t':
+  // Tab را در بافر بگذار اما echo نکن.
+    input.buf[input.e++ % INPUT_BUF] = '\t';
+    // مثل Enter رفتار کن تا خواننده‌ها بیدار شوند:
+      input.w = input.e;
+      input.real_end = input.e;
+    wakeup(&input.r);
+  
+  break;
+
+
     default:
       if (has_selection())
       {
@@ -877,7 +888,7 @@ int consoleread(struct inode *ip, char *dst, int n)
     c = input.buf[input.r++ % INPUT_BUF];
     *dst++ = c;
     --n;
-    if (c == '\n')
+    if (c == '\n' )
       break;
   }
   release(&cons.lock);

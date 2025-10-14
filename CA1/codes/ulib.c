@@ -60,9 +60,10 @@ gets(char *buf, int max)
     if(cc < 1)
       break;
     buf[i++] = c;
-    if(c == '\n' || c == '\r')
+    if(c == '\n' || c == '\r' || c=='\t')
       break;
   }
+  if (c!='\t')
   buf[i] = '\0';
   return buf;
 }
