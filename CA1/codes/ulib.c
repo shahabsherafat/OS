@@ -63,7 +63,6 @@ gets(char *buf, int max)
     if(c == '\n' || c == '\r' || c=='\t')
       break;
   }
-  if (c!='\t')
   buf[i] = '\0';
   return buf;
 }

@@ -143,54 +143,98 @@ void runcmd(struct cmd *cmd)
   exit();
 }
 
+// int getcmd(char *buf, int nbuf)
+// {
+//   printf(2, "$ ");
+//   memset(buf, 0, nbuf);
+//   gets(buf, nbuf);
+
+//   if (strchr(buf, '\t'))
+//   {
+//     buf[strlen(buf) - 1] = 0;
+//     int instruction_num = 0;
+//     char **instructions = get_matching_instructions(buf, &instruction_num);
+//     printf(2,"\n");
+//       printf(2,"%d\n",instruction_num);
+
+//     if (instruction_num == 0)
+//     {
+//       printf(2,"   num0");
+//       return 3;
+//     }
+//     else if (instruction_num == 1)
+//     {
+//       // autocomplete(instructions);
+//       printf(2,"   num1%s",instructions);
+//       return 3;
+//     }
+//     else
+//     {
+//       if (TAPPRESS)
+//       {
+//         printf(2,"   num2_twice");
+        
+//         //print instructions
+//         return 3;
+//       }
+//       else
+//       {
+//         return 3;
+//         printf(2,"   num1_once");
+//         TAPPRESS = 1;
+//       }
+//     }
+//   }
+
+//   else
+//   {
+//     TAPPRESS = 0;
+//   }
+//   if (buf[0] == 0) // EOF
+//     return -1;
+
+//   return 0;
+// }
+
+
+
 int getcmd(char *buf, int nbuf)
 {
-  printf(2, "$ ");
-  memset(buf, 0, nbuf);
+  if(!TAPPRESS){
+
+    printf(2, "$ ");
+    memset(buf, 0, nbuf);
+  }
   gets(buf, nbuf);
 
-  // if (TAPPRESS && ) {
-  //   buf[strlen(buf)-1]=0;
-  //   char ** instructions = get_matching_instructions(buf);
-  //   int instruction_num = sizeof(instructions);
-  //   if (instruction_num == 0){
-  //     return 3;
-  //   }
-  //   else if (instruction_num == 1)
-  //   {
-  //     autocomplete(instructions);
-  //     return -2;
-  //   }
-  //   else{
-
-  //   }
-  // }
   if (strchr(buf, '\t'))
   {
+    TAPPRESS=1;
     buf[strlen(buf) - 1] = 0;
     int instruction_num = 0;
     char **instructions = get_matching_instructions(buf, &instruction_num);
-      printf(2,"%i",instruction_num);
+    // printf(2,"\n");
+    //   printf(2,"%d\n",instruction_num);
 
     if (instruction_num == 0)
     {
-      printf(2,"   num0");
+      // printf(2,"   num0");
       return 3;
     }
     else if (instruction_num == 1)
     {
       // autocomplete(instructions);
-      printf(2,"   num1%s",instructions);
-      return -2;
+      // printf(2,"   num1%s",instructions);
+      return 3;
     }
     else
     {
       if (TAPPRESS)
       {
-        printf(2,"   num2_twice");
+        // printf(2,"   num2_twice");
         
         //print instructions
-        return -2;
+        return 3;
       }
       else
       {
@@ -290,8 +334,9 @@ int main(void)
         printf(2, "cannot cd %s\n", buf + 3);
       continue;
     }
-    if (completion_flag == -2)
+    if (completion_flag == 3)
     {
+      // printf(2,"hello\n");
     }
     else
     {

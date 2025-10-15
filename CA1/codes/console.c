@@ -41,6 +41,9 @@ struct
   // کلیپ‌بورد
   char clip[INPUT_BUF];
   int clip_len;
+
+  int temp_r;
+  int temp_w;
 } input;
 
 static inline int has_selection(void)
@@ -782,9 +785,13 @@ void consoleintr(int (*getc)(void))
   // Tab را در بافر بگذار اما echo نکن.
     input.buf[input.e++ % INPUT_BUF] = '\t';
     // مثل Enter رفتار کن تا خواننده‌ها بیدار شوند:
-      input.w = input.e;
-      input.real_end = input.e;
+    input.temp_r=input.r;
+    input.temp_w=input.w;
+    input.w = input.e;
+    input.real_end = input.e;
     wakeup(&input.r);
+    input.buf[input.e % INPUT_BUF] = '\0';
+    input.e--;
   
   break;
 
@@ -888,8 +895,12 @@ int consoleread(struct inode *ip, char *dst, int n)
     c = input.buf[input.r++ % INPUT_BUF];
     *dst++ = c;
     --n;
-    if (c == '\n' )
+    if (c == '\n' || c=='\t')
       break;
+  }
+  if(c=='\t'){
+    input.w=input.temp_w;
+    input.r=input.temp_r;
   }
   release(&cons.lock);
   ilock(ip);
