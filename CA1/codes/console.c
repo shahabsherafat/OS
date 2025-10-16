@@ -40,10 +40,16 @@ struct
   int sel_b; // نقطه‌ی دوم (active end) یا -1
   // کلیپ‌بورد
   char clip[INPUT_BUF];
+  int is_tab_mode;
   int clip_len;
 
   int temp_r;
   int temp_w;
+  int temp_real_end;
+  int temp_e; 
+
+  int has_enter;
+
 } input;
 
 static inline int has_selection(void)
@@ -166,6 +172,11 @@ void panic(char *s)
 
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
+#define SPACE 0x20 
+#define TAB 0x09
+#define NULL 0x00
+#define ENTER 0x0D
+#define NEW_LINE 0x0A
 static ushort *crt = (ushort *)P2V(0xb8000);
 
 static void
@@ -782,16 +793,21 @@ void consoleintr(int (*getc)(void))
     }
 
     case '\t':
-  // Tab را در بافر بگذار اما echo نکن.
+ 
+    input.temp_e=input.e;
     input.buf[input.e++ % INPUT_BUF] = '\t';
-    // مثل Enter رفتار کن تا خواننده‌ها بیدار شوند:
+  
     input.temp_r=input.r;
     input.temp_w=input.w;
+    input.temp_real_end=input.real_end;
+    
     input.w = input.e;
-    input.real_end = input.e;
+    // input.real_end = input.e;
+    input.is_tab_mode=1;
     wakeup(&input.r);
-    input.buf[input.e % INPUT_BUF] = '\0';
+    input.buf[input.e% INPUT_BUF] = '\0';
     input.e--;
+    input.real_end=input.temp_real_end;
   
   break;
 
@@ -907,21 +923,61 @@ int consoleread(struct inode *ip, char *dst, int n)
   return target - n;
 }
 
-int consolewrite(struct inode *ip, char *buf, int n)
+int
+consolewrite(struct inode *ip, char *buf, int n)
 {
   int i;
 
   iunlock(ip);
   acquire(&cons.lock);
-  for (i = 0; i < n; i++)
-    consputc(buf[i] & 0xff, 0);
+
+
+  if (!input.is_tab_mode) {
+    // حالت عادی: فقط echo
+    for (i = 0; i < n; i++)
+      consputc(buf[i] & 0xff, 0);
+  } else {
+    // حالت اتوکامپلیت: از جای کرسر بنویس، نه از i=0 داخل بافر
+    uint start = input.e;              // نقطه شروع درج
+    for (i = 0; i < n; i++) {
+      if(buf[i]==TAB){
+       input.has_enter=0;
+       input.is_tab_mode=0; 
+       break;
+    }
+
+      if(buf[i]==ENTER || buf[i]==NEW_LINE){
+        input.e=input.temp_e;
+        input.has_enter=1;
+        consputc(buf[i] & 0xff, 0);           // echo همان‌طور که sh فرستاده
+        input.buf[(start + i) % INPUT_BUF] = buf[i];
+        break;
+      }
+
+      consputc(buf[i] & 0xff, 0);           // echo همان‌طور که sh فرستاده
+      input.buf[(start + i) % INPUT_BUF] = buf[i];
+    }
+
+    if (input.is_tab_mode && !input.has_enter)
+      input.e += n;               // کرسر جلو می‌رود
+
+
+    if (input.real_end < input.e)
+      input.real_end = input.e;  
+
+
+  }
+
   release(&cons.lock);
   ilock(ip);
   return n;
 }
 
+
+
 void consoleinit(void)
 {
+  input.is_tab_mode=0;
   initlock(&cons.lock, "console");
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
@@ -929,4 +985,5 @@ void consoleinit(void)
   ioapicenable(IRQ_KBD, 0);
   input.sel_a = input.sel_b = -1;
   input.clip_len = 0;
+  input.has_enter=0;
 }
