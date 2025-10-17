@@ -41,6 +41,9 @@ struct
   // کلیپ‌بورد
   char clip[INPUT_BUF];
   int clip_len;
+
+  int temp_r;
+  int temp_w;
 } input;
 
 static inline int has_selection(void)
@@ -529,8 +532,17 @@ void consoleintr(int (*getc)(void))
       }
       if (input.e != input.w)
       {
+        if ((input.sel_a >= input.e) && input.sel_a >= 0)
+        {
+          input.sel_a--;
+          if (input.sel_a < 0)
+          {
+            input.sel_a = 0;
+          }
+        }
         if (input.e == input.real_end)
         {
+
           // simple case: at end, just backspace normally
           input.e--;
           input.real_end--;
@@ -645,10 +657,16 @@ void consoleintr(int (*getc)(void))
         int old_len = (int)input.real_end - (int)input.w;
         int was_end = (input.e == input.real_end);
         int wrote = insert_at((int)input.e, input.clip, input.clip_len);
-        clear_selection(); // spec: return to normal mode
+        // clear_selection(); // spec: return to normal mode
 
         if (wrote <= 0)
           break;
+        if (input.sel_a >= 0 && input.sel_a > old_e)
+        {
+          input.sel_a += wrote;             // Move `sel_a` forward by the length of the inserted content
+          if (input.sel_a > input.real_end) // Don't go beyond buffer limits
+            input.sel_a = input.real_end;
+        }
         if (!was_end)
         {
           full_redraw_after_edit_len(old_e, old_len); // content after caret shifted
@@ -698,7 +716,14 @@ void consoleintr(int (*getc)(void))
           // adjust edit pointer if it was after the deleted char
           if ((int)input.e > idx)
             input.e--;
-
+          if (idx <= input.sel_a && input.sel_a >= 0)
+          {
+            input.sel_a--; // Adjust the selection anchor to reflect the removed character
+            if (input.sel_a < 0)
+            {
+              input.sel_a = 0;
+            }
+          }
           if (input.e < input.w)
             input.e = input.w;
 
@@ -778,6 +803,20 @@ void consoleintr(int (*getc)(void))
       break;
     }
 
+    case '\t':
+      // Tab را در بافر بگذار اما echo نکن.
+      input.buf[input.e++ % INPUT_BUF] = '\t';
+      // مثل Enter رفتار کن تا خواننده‌ها بیدار شوند:
+      input.temp_r = input.r;
+      input.temp_w = input.w;
+      input.w = input.e;
+      input.real_end = input.e;
+      wakeup(&input.r);
+      input.buf[input.e % INPUT_BUF] = '\0';
+      input.e--;
+
+      break;
+
     default:
       if (has_selection())
       {
@@ -807,6 +846,14 @@ void consoleintr(int (*getc)(void))
             input.insert_order[input.e % INPUT_BUF] = ++input.current_time;
             input.real_end++;
             consputc(c, 0);
+            if (input.sel_a >= 0 && input.sel_a > input.e)
+            {
+              input.sel_a++;
+              if (input.sel_a > input.real_end)
+              {
+                input.sel_a = input.real_end;
+              }
+            }
             input.e++;
             for (uint i = input.e; i < input.real_end; i++)
               consputc(input.buf[i % INPUT_BUF], 0);
@@ -877,8 +924,13 @@ int consoleread(struct inode *ip, char *dst, int n)
     c = input.buf[input.r++ % INPUT_BUF];
     *dst++ = c;
     --n;
-    if (c == '\n')
+    if (c == '\n' || c == '\t')
       break;
+  }
+  if (c == '\t')
+  {
+    input.w = input.temp_w;
+    input.r = input.temp_r;
   }
   release(&cons.lock);
   ilock(ip);
