@@ -46,7 +46,7 @@ struct
   int temp_r;
   int temp_w;
   int temp_real_end;
-  int temp_e; 
+  int temp_e;
 
   int has_enter;
 
@@ -172,7 +172,7 @@ void panic(char *s)
 
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
-#define SPACE 0x20 
+#define SPACE 0x20
 #define TAB 0x09
 #define NULL 0x00
 #define ENTER 0x0D
@@ -436,12 +436,9 @@ static void full_redraw_after_edit_len(uint old_e, int old_len_before)
 
 static inline void deselect_and_redraw_if_any(void)
 {
-  if (has_selection())
-  {
-    uint old_e = input.e;
-    clear_selection();
-    full_redraw_after_edit(old_e);
-  }
+  uint old_e = input.e;
+  clear_selection();
+  full_redraw_after_edit(old_e);
 }
 
 static void replace_selection_with(const char *src, int n)
@@ -468,7 +465,12 @@ void consoleintr(int (*getc)(void))
 
     // Jump right by word
     case C('D'):
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       while (input.e < input.real_end && input.buf[input.e % INPUT_BUF] != ' ' && input.buf[input.e % INPUT_BUF] != '\n')
       {
         char ch = input.buf[input.e % INPUT_BUF];
@@ -485,7 +487,12 @@ void consoleintr(int (*getc)(void))
 
     // Jump left by word
     case C('A'):
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       if (input.e > 0 && input.buf[(input.e - 1) % INPUT_BUF] == ' ')
       {
         consputc(KEY_LF, 0);
@@ -504,14 +511,24 @@ void consoleintr(int (*getc)(void))
       break;
 
     case C('P'):
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       doprocdump = 1;
       break;
 
     // Clear line
     case C('U'):
     {
+      if (has_selection())
+      {
 
+        deselect_and_redraw_if_any();
+        break;
+      }
       while (input.e != input.w &&
              input.buf[(input.e - 1) % INPUT_BUF] != '\n')
       {
@@ -525,7 +542,7 @@ void consoleintr(int (*getc)(void))
 
     // Backspace
     case C('H'):
- case '\x7f':
+    case '\x7f':
     {
       if (has_selection())
       {
@@ -615,10 +632,14 @@ void consoleintr(int (*getc)(void))
       break;
     }
 
-
     // Move left
     case KEY_LF:
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       if (input.e > input.w)
       {
         input.e--;
@@ -628,7 +649,12 @@ void consoleintr(int (*getc)(void))
 
     // Move right
     case KEY_RT:
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       if (input.e < input.real_end)
       {
         char ch = input.buf[input.e % INPUT_BUF];
@@ -667,7 +693,7 @@ void consoleintr(int (*getc)(void))
         int old_len = (int)input.real_end - (int)input.w;
         int was_end = (input.e == input.real_end);
         int wrote = insert_at((int)input.e, input.clip, input.clip_len);
-        //clear_selection(); // spec: return to normal mode
+        // clear_selection(); // spec: return to normal mode
 
         if (wrote <= 0)
           break;
@@ -691,10 +717,15 @@ void consoleintr(int (*getc)(void))
       break;
     }
 
-    // === Ctrl+Z: delete last inserted char (time-based) ===
-     case C('Z'):
+      // === Ctrl+Z: delete last inserted char (time-based) ===
+    case C('Z'):
     {
-      deselect_and_redraw_if_any();
+      if (has_selection())
+      {
+
+        deselect_and_redraw_if_any();
+        break;
+      }
       if (input.real_end > input.w)
       {
         int max_t = -1, idx = -1;
@@ -814,24 +845,23 @@ void consoleintr(int (*getc)(void))
     }
 
     case '\t':
- 
-    input.temp_e=input.e;
-    input.buf[input.e++ % INPUT_BUF] = '\t';
-  
-    input.temp_r=input.r;
-    input.temp_w=input.w;
-    input.temp_real_end=input.real_end;
-    
-    input.w = input.e;
-    // input.real_end = input.e;
-    input.is_tab_mode=1;
-    wakeup(&input.r);
-    input.buf[input.e% INPUT_BUF] = '\0';
-    input.e--;
-    input.real_end=input.temp_real_end;
-  
-  break;
 
+      input.temp_e = input.e;
+      input.buf[input.e++ % INPUT_BUF] = '\t';
+
+      input.temp_r = input.r;
+      input.temp_w = input.w;
+      input.temp_real_end = input.real_end;
+
+      input.w = input.e;
+      // input.real_end = input.e;
+      input.is_tab_mode = 1;
+      wakeup(&input.r);
+      input.buf[input.e % INPUT_BUF] = '\0';
+      input.e--;
+      input.real_end = input.temp_real_end;
+
+      break;
 
     default:
       if (has_selection())
@@ -909,8 +939,6 @@ void consoleintr(int (*getc)(void))
         }
       }
       break;
-
-
     }
   }
 
@@ -942,61 +970,63 @@ int consoleread(struct inode *ip, char *dst, int n)
     c = input.buf[input.r++ % INPUT_BUF];
     *dst++ = c;
     --n;
-    if (c == '\n' || c=='\t')
+    if (c == '\n' || c == '\t')
       break;
   }
-  if(c=='\t'){
-    input.w=input.temp_w;
-    input.r=input.temp_r;
+  if (c == '\t')
+  {
+    input.w = input.temp_w;
+    input.r = input.temp_r;
   }
   release(&cons.lock);
   ilock(ip);
   return target - n;
 }
 
-int
-consolewrite(struct inode *ip, char *buf, int n)
+int consolewrite(struct inode *ip, char *buf, int n)
 {
   int i;
 
   iunlock(ip);
   acquire(&cons.lock);
 
-
-  if (!input.is_tab_mode) {
+  if (!input.is_tab_mode)
+  {
     // حالت عادی: فقط echo
     for (i = 0; i < n; i++)
       consputc(buf[i] & 0xff, 0);
-  } else {
+  }
+  else
+  {
     // حالت اتوکامپلیت: از جای کرسر بنویس، نه از i=0 داخل بافر
-    uint start = input.e;              // نقطه شروع درج
-    for (i = 0; i < n; i++) {
-      if(buf[i]==TAB){
-       input.has_enter=0;
-       input.is_tab_mode=0; 
-       break;
-    }
+    uint start = input.e; // نقطه شروع درج
+    for (i = 0; i < n; i++)
+    {
+      if (buf[i] == TAB)
+      {
+        input.has_enter = 0;
+        input.is_tab_mode = 0;
+        break;
+      }
 
-      if(buf[i]==ENTER || buf[i]==NEW_LINE){
-        input.e=input.temp_e;
-        input.has_enter=1;
-        consputc(buf[i] & 0xff, 0);           // echo همان‌طور که sh فرستاده
+      if (buf[i] == ENTER || buf[i] == NEW_LINE)
+      {
+        input.e = input.temp_e;
+        input.has_enter = 1;
+        consputc(buf[i] & 0xff, 0); // echo همان‌طور که sh فرستاده
         input.buf[(start + i) % INPUT_BUF] = buf[i];
         break;
       }
 
-      consputc(buf[i] & 0xff, 0);           // echo همان‌طور که sh فرستاده
+      consputc(buf[i] & 0xff, 0); // echo همان‌طور که sh فرستاده
       input.buf[(start + i) % INPUT_BUF] = buf[i];
     }
 
     if (input.is_tab_mode && !input.has_enter)
-      input.e += n;               // کرسر جلو می‌رود
-
+      input.e += n; // کرسر جلو می‌رود
 
     if (input.real_end < input.e)
-      input.real_end = input.e;  
-
-
+      input.real_end = input.e;
   }
 
   release(&cons.lock);
@@ -1004,11 +1034,9 @@ consolewrite(struct inode *ip, char *buf, int n)
   return n;
 }
 
-
-
 void consoleinit(void)
 {
-  input.is_tab_mode=0;
+  input.is_tab_mode = 0;
   initlock(&cons.lock, "console");
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
@@ -1016,5 +1044,5 @@ void consoleinit(void)
   ioapicenable(IRQ_KBD, 0);
   input.sel_a = input.sel_b = -1;
   input.clip_len = 0;
-  input.has_enter=0;
+  input.has_enter = 0;
 }
