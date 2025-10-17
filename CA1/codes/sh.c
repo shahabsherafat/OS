@@ -157,6 +157,7 @@ print_instructions(char **instructions, int count, const char *prefix)
     if (instructions[i])
       printf(2, "%s\n", instructions[i]);
   }
+  
   printf(2, "\t");
   printf(2, "$ %s", prefix);
 }
@@ -199,16 +200,16 @@ getcmd(char *buf, int nbuf)
       if (temp_buf)
         memmove(temp_buf, buf, nbuf);
       return 3;
-    } 
-    else if (instruction_num == 1) {
+    }
 
+    else if (instruction_num == 1) {
       auto_complete(instructions[0], buf);
       TAPPRESS = 1;
       if (temp_buf)
         memmove(temp_buf, buf, nbuf); 
       return 3;
+    }
 
-    } 
     else {
 
       if (has_multiple_choice) {
@@ -221,6 +222,7 @@ getcmd(char *buf, int nbuf)
 
         return 3;
       } 
+      
       else {
 
         has_multiple_choice = 1; 
@@ -231,7 +233,9 @@ getcmd(char *buf, int nbuf)
         return 3;
       }
     }
-  } else {
+  }
+  
+  else {
     TAPPRESS = 0;
     has_multiple_choice = 0;
   }
@@ -250,8 +254,10 @@ scratchـstrncpy(char *dst, const char *src, int n)
   int i;
   for (i = 0; i < n && src[i]; i++)
     dst[i] = src[i];
+
   for (; i < n; i++)
     dst[i] = 0;
+
   return dst;
 }
 
@@ -266,13 +272,15 @@ get_matching_instructions(char *prefix, int *num_of_instructions)
   int counter = 0;
   int prefix_len = strlen(prefix);
 
-  
   int match_cd = 1;
   for (int i = 0; i < prefix_len; i++) {
     if (prefix[i] != 'c' && i == 0) { match_cd = 0; break; }
+
     if (i == 1 && prefix[i] != 'd') { match_cd = 0; break; }
+
     if (i > 1) { match_cd = 0; break; } 
   }
+
   if (match_cd) {
     instructions[counter] = malloc(3);
     scratchـstrncpy(instructions[counter], "cd", 3);
@@ -280,8 +288,6 @@ get_matching_instructions(char *prefix, int *num_of_instructions)
     counter++;
     *num_of_instructions = counter;
   }
-
-
   
   while (read(fd, &de, sizeof(de)) == sizeof(de)) {
     if (de.inum == 0)
@@ -333,9 +339,12 @@ main(void)
         printf(2, "cannot cd %s\n", buf + 3);
       continue;
     }
+
     if (completion_flag == 3) {
-      // completion path; do nothing
-    } else {
+      // Completion path; do nothing
+    }
+    
+    else {
       if (fork1() == 0)
         runcmd(parsecmd(buf));
       wait();

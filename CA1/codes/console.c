@@ -273,17 +273,22 @@ static void delete_range(int lo, int hi)
 {
   if (hi <= lo)
     return;
+
   int deln = hi - lo;
   for (int i = hi; i < (int)input.real_end; i++)
   {
     input.buf[(i - deln) % INPUT_BUF] = input.buf[i % INPUT_BUF];
     input.insert_order[(i - deln) % INPUT_BUF] = input.insert_order[i % INPUT_BUF];
   }
+
   input.real_end -= deln;
+
   if (input.e > hi)
     input.e -= deln;
+
   else if (input.e > lo)
     input.e = lo;
+
   if (input.e < input.w)
     input.e = input.w;
 }
@@ -292,10 +297,13 @@ static int insert_at(int pos, const char *src, int n)
 {
   if (n <= 0)
     return 0;
+
   int inuse = (int)input.real_end - (int)input.r;
   int free = INPUT_BUF - inuse;
+
   if (free <= 0)
     return 0;
+
   if (n > free)
     n = free;
 
@@ -304,17 +312,20 @@ static int insert_at(int pos, const char *src, int n)
     input.buf[(i + n) % INPUT_BUF] = input.buf[i % INPUT_BUF];
     input.insert_order[(i + n) % INPUT_BUF] = input.insert_order[i % INPUT_BUF];
   }
+
   int wrote = 0;
   for (; wrote < n; ++wrote)
   {
     char ch = src[wrote];
     if (ch == '\n')
-      break; // اجازه‌ی newline نده
+      break; //Don't allow newline
     input.buf[(pos + wrote) % INPUT_BUF] = ch;
     input.insert_order[(pos + wrote) % INPUT_BUF] = ++input.current_time;
   }
+
   input.real_end += wrote;
   input.e = pos + wrote;
+
   return wrote;
 }
 
@@ -322,6 +333,7 @@ static void redraw_edit_with_selection(void)
 {
   int old_e = (int)input.e;
   int len = (int)input.real_end - (int)input.w;
+
   if (len < 0)
     len = 0;
 
@@ -428,12 +440,6 @@ static void full_redraw_after_edit_len(uint old_e, int old_len_before)
     consputc(KEY_LF, 0);
 }
 
-// static void deselect_and_full_redraw(void){
-//   uint old_e = input.e;
-//   clear_selection();
-//   full_redraw_after_edit(old_e);
-// }
-
 static inline void deselect_and_redraw_if_any(void)
 {
   uint old_e = input.e;
@@ -462,7 +468,6 @@ void consoleintr(int (*getc)(void))
   {
     switch (c)
     {
-
     // Jump right by word
     case C('D'):
       if (has_selection())
@@ -471,49 +476,54 @@ void consoleintr(int (*getc)(void))
         deselect_and_redraw_if_any();
         break;
       }
+
       while (input.e < input.real_end && input.buf[input.e % INPUT_BUF] != ' ' && input.buf[input.e % INPUT_BUF] != '\n')
       {
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
+
       while (input.e < input.real_end && input.buf[input.e % INPUT_BUF] == ' ' && input.buf[input.e % INPUT_BUF] != '\n')
       {
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
+
       break;
 
     // Jump left by word
     case C('A'):
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
+
       if (input.e > 0 && input.buf[(input.e - 1) % INPUT_BUF] == ' ')
       {
         consputc(KEY_LF, 0);
         input.e--;
       }
+
       while (input.e > 0 && input.buf[input.e % INPUT_BUF] == ' ')
       {
         consputc(KEY_LF, 0);
         input.e--;
       }
+
       while (input.e > 0 && input.buf[(input.e - 1) % INPUT_BUF] != ' ')
       {
         consputc(KEY_LF, 0);
         input.e--;
       }
+
       break;
 
     case C('P'):
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
@@ -525,16 +535,17 @@ void consoleintr(int (*getc)(void))
     {
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
+
       while (input.e != input.w &&
              input.buf[(input.e - 1) % INPUT_BUF] != '\n')
       {
         input.e--;
         consputc(BACKSPACE, 0);
       }
+
       input.real_end = input.e;
       input.current_time = 0;
       break;
@@ -557,6 +568,7 @@ void consoleintr(int (*getc)(void))
         full_redraw_after_edit_len(old_e, old_len);
         break;
       }
+
       if (input.e != input.w)
       {
         if ((input.sel_a >= input.e) && input.sel_a >= 0)
@@ -567,14 +579,15 @@ void consoleintr(int (*getc)(void))
             input.sel_a = 0;
           }
         }
+
         if (input.e == input.real_end)
         {
-
           // simple case: at end, just backspace normally
           input.e--;
           input.real_end--;
           consputc(BACKSPACE, 0);
         }
+
         else
         {
           // deletion in the middle -> update buffer & timestamps, then robust redraw
@@ -592,6 +605,7 @@ void consoleintr(int (*getc)(void))
             input.buf[i % INPUT_BUF] = input.buf[(i + 1) % INPUT_BUF];
             input.insert_order[i % INPUT_BUF] = input.insert_order[(i + 1) % INPUT_BUF];
           }
+
           input.real_end--;
           if (input.e > input.real_end)
             input.e = input.real_end;
@@ -600,9 +614,11 @@ void consoleintr(int (*getc)(void))
           int new_len = (int)input.real_end - (int)input.w;
           if (new_len < 0)
             new_len = 0;
+
           int old_cursor_off = old_e - (int)input.w;
           if (old_cursor_off < 0)
             old_cursor_off = 0;
+
           int new_cursor_off = (int)input.e - (int)input.w;
           if (new_cursor_off < 0)
             new_cursor_off = 0;
@@ -636,10 +652,10 @@ void consoleintr(int (*getc)(void))
     case KEY_LF:
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
+
       if (input.e > input.w)
       {
         input.e--;
@@ -651,19 +667,21 @@ void consoleintr(int (*getc)(void))
     case KEY_RT:
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
+
       if (input.e < input.real_end)
       {
         char ch = input.buf[input.e % INPUT_BUF];
         consputc(KEY_RT, ch);
         input.e++;
       }
+      
       break;
+
+    // Copy
     case C('C'):
-    { // Copy
       if (has_selection())
       {
         int lo, hi;
@@ -677,9 +695,9 @@ void consoleintr(int (*getc)(void))
         // طبق مشخصات: انتخاب باید باقی بماند؛ نیازی به redraw نیست
       }
       break;
-    }
+
+    // Paste
     case C('V'):
-    { // Paste
       if (input.clip_len <= 0)
         break; // nothing to paste
 
@@ -687,6 +705,7 @@ void consoleintr(int (*getc)(void))
       {
         replace_selection_with(input.clip, input.clip_len);
       }
+
       else
       {
         uint old_e = input.e;
@@ -714,18 +733,18 @@ void consoleintr(int (*getc)(void))
             consputc(input.buf[(input.e - wrote + i) % INPUT_BUF], 0);
         }
       }
+
       break;
-    }
 
       // === Ctrl+Z: delete last inserted char (time-based) ===
     case C('Z'):
-    {
       if (has_selection())
       {
 
         deselect_and_redraw_if_any();
         break;
       }
+
       if (input.real_end > input.w)
       {
         int max_t = -1, idx = -1;
@@ -739,6 +758,7 @@ void consoleintr(int (*getc)(void))
             idx = (int)i;
           }
         }
+
         if (idx >= 0)
         {
           int old_e = (int)input.e;
@@ -754,9 +774,11 @@ void consoleintr(int (*getc)(void))
             input.insert_order[i % INPUT_BUF] = input.insert_order[(i + 1) % INPUT_BUF];
           }
           input.real_end--;
+
           // adjust edit pointer if it was after the deleted char
           if ((int)input.e > idx)
             input.e--;
+
           if (idx <= input.sel_a && input.sel_a >= 0)
           {
             input.sel_a--; // Adjust the selection anchor to reflect the removed character
@@ -765,6 +787,7 @@ void consoleintr(int (*getc)(void))
               input.sel_a = 0;
             }
           }
+
           if (input.e < input.w)
             input.e = input.w;
 
@@ -810,11 +833,11 @@ void consoleintr(int (*getc)(void))
             consputc(KEY_LF, 0);
         }
       }
-      break;
-    }
 
+      break;
+    
+    //Selection
     case C('S'):
-    {
       // If a selection exists, Ctrl+S toggles it OFF.
       if (has_selection())
       {
@@ -837,15 +860,16 @@ void consoleintr(int (*getc)(void))
       {
         clear_selection(); // zero-length → no selection
       }
+
       else
       {
         redraw_edit_with_selection(); // show highlight
       }
+
       break;
-    }
 
+    //Autocompletion
     case '\t':
-
       input.temp_e = input.e;
       input.buf[input.e++ % INPUT_BUF] = '\t';
 
@@ -874,9 +898,11 @@ void consoleintr(int (*getc)(void))
           char one[1] = {(char)ch};
           replace_selection_with(one, 1); // handles delete+insert+redraw+deselect
         }
+
         // For control/non-printables do nothing here (explicit cases handle deselect).
         break; // IMPORTANT: do not fall through to normal typing path
       }
+
       if (input.e < input.real_end)
       {
         if (c != 0 && input.real_end - input.r < INPUT_BUF)
@@ -920,6 +946,7 @@ void consoleintr(int (*getc)(void))
           }
         }
       }
+
       else
       {
         if (c != 0 && input.real_end - input.r < INPUT_BUF)
@@ -938,6 +965,7 @@ void consoleintr(int (*getc)(void))
           }
         }
       }
+      
       break;
     }
   }
@@ -955,6 +983,7 @@ int consoleread(struct inode *ip, char *dst, int n)
   iunlock(ip);
   target = n;
   acquire(&cons.lock);
+
   while (n > 0)
   {
     while (input.r == input.w)
@@ -967,19 +996,24 @@ int consoleread(struct inode *ip, char *dst, int n)
       }
       sleep(&input.r, &cons.lock);
     }
+
     c = input.buf[input.r++ % INPUT_BUF];
     *dst++ = c;
     --n;
+
     if (c == '\n' || c == '\t')
       break;
   }
+
   if (c == '\t')
   {
     input.w = input.temp_w;
     input.r = input.temp_r;
   }
+
   release(&cons.lock);
   ilock(ip);
+
   return target - n;
 }
 
@@ -992,14 +1026,15 @@ int consolewrite(struct inode *ip, char *buf, int n)
 
   if (!input.is_tab_mode)
   {
-    // حالت عادی: فقط echo
+    // Normal state of echo
     for (i = 0; i < n; i++)
       consputc(buf[i] & 0xff, 0);
   }
+
   else
   {
-    // حالت اتوکامپلیت: از جای کرسر بنویس، نه از i=0 داخل بافر
-    uint start = input.e; // نقطه شروع درج
+    // Write from the cursor point not the beggining
+    uint start = input.e;
     for (i = 0; i < n; i++)
     {
       if (buf[i] == TAB)
@@ -1013,17 +1048,17 @@ int consolewrite(struct inode *ip, char *buf, int n)
       {
         input.e = input.temp_e;
         input.has_enter = 1;
-        consputc(buf[i] & 0xff, 0); // echo همان‌طور که sh فرستاده
+        consputc(buf[i] & 0xff, 0);
         input.buf[(start + i) % INPUT_BUF] = buf[i];
         break;
       }
 
-      consputc(buf[i] & 0xff, 0); // echo همان‌طور که sh فرستاده
+      consputc(buf[i] & 0xff, 0);
       input.buf[(start + i) % INPUT_BUF] = buf[i];
     }
 
     if (input.is_tab_mode && !input.has_enter)
-      input.e += n; // کرسر جلو می‌رود
+      input.e += n; // cursor moves right as much as the length of new order is.
 
     if (input.real_end < input.e)
       input.real_end = input.e;
@@ -1031,6 +1066,7 @@ int consolewrite(struct inode *ip, char *buf, int n)
 
   release(&cons.lock);
   ilock(ip);
+  
   return n;
 }
 
