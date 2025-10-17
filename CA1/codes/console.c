@@ -36,9 +36,8 @@ struct
   uint real_end;
   int insert_order[INPUT_BUF];
   int current_time;
-  int sel_a; // نقطه‌ی اول (anchor) یا -1
-  int sel_b; // نقطه‌ی دوم (active end) یا -1
-  // کلیپ‌بورد
+  int sel_a;
+  int sel_b;
   char clip[INPUT_BUF];
   int is_tab_mode;
   int clip_len;
@@ -740,7 +739,6 @@ void consoleintr(int (*getc)(void))
     case C('Z'):
       if (has_selection())
       {
-
         deselect_and_redraw_if_any();
         break;
       }
@@ -1066,7 +1064,7 @@ int consolewrite(struct inode *ip, char *buf, int n)
 
   release(&cons.lock);
   ilock(ip);
-  
+
   return n;
 }
 
