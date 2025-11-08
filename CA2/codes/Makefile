@@ -187,6 +187,9 @@ UPROGS=\
 	_test_duplicate\
 	_show_process_family\
 	_family_process_demo\
+	_mygetpid\
+	_arith \
+	_test_arith\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

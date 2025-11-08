@@ -25,6 +25,7 @@ int sleep(int);
 int uptime(void);
 int make_duplicate_file(const char*);
 int show_process_family(int pid);
+int simple_arithmetic_syscall(int a, int b);
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -105,6 +105,7 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_make_duplicate_file(void);
 extern int sys_show_process_family(void);
+extern int sys_simple_arithmetic(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -130,6 +131,8 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_make_duplicate_file] sys_make_duplicate_file,
 [SYS_show_process_family] sys_show_process_family,
+[SYS_simple_arithmetic_syscall] sys_simple_arithmetic,
+
 };
 
 void

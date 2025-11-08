@@ -100,3 +100,20 @@ sys_show_process_family(void)
     }
   return process_family(pid);
 }
+
+int
+sys_simple_arithmetic(void)
+{
+  struct proc *p = myproc();
+  int a = p->tf->ebx; 
+  int b = p->tf->ecx;
+
+  int sum = a + b;
+  int diff = a - b;
+  int res = sum * diff;
+
+  cprintf("simple_arith: a=%d b=%d -> (%d+%d)*(%d-%d) = %d\n",a, b, a, b, a, b, res);
+
+  return res;
+}
+
