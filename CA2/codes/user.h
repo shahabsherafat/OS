@@ -24,6 +24,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int make_duplicate_file(const char*);
+int show_process_family(int pid);
 
 // ulib.c
 int stat(const char*, struct stat*);

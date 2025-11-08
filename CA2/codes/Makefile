@@ -185,6 +185,8 @@ UPROGS=\
 	_zombie\
 	_find_sum\
 	_test_duplicate\
+	_show_process_family\
+	_family_process_demo\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
