@@ -117,3 +117,12 @@ sys_simple_arithmetic(void)
   return res;
 }
 
+int
+sys_set_priority_syscall(void)
+{
+  int pid, prio;
+  if(argint(0, &pid)  < 0) return -1;
+  if(argint(1, &prio) < 0) return -1;
+  return set_priority(pid, prio);
+}
+

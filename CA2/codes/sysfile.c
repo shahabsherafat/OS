@@ -18,6 +18,9 @@
 
 #define MAXPATH 128
 
+#define MAXKEY 128
+#define CHUNK 512
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -537,4 +540,119 @@ err:
   kfree(kbuf);
   end_op();
   return -1;
+}
+
+static int line_has_keyword(const char *line, int n, const char *key){
+    if(!key[0])
+        return 1;
+
+    for (int i = 0; i < n; i++){
+        int j = 0;
+
+        while(i+j < n && key[j] && line[i+j] == key[j])
+            j++;
+
+        if(key[j] == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
+int sys_grep_syscall(void){
+    char *keyword, *filename;
+    char *ubuf;
+    int bufsz;
+
+    if(argstr(0, &keyword) < 0)
+        return -1;
+    if((1, &filename) < 0)
+        return -1;
+    if(argint(3, &bufsz) < 0 || bufsz <= 1)
+        return -1;
+    if(argptr(2, &ubuf, bufsz) < 0)
+        return -1;
+
+    struct inode *ip = namei(filename);
+    if(!ip)
+        return -1;
+
+    ilock(ip);
+    if(ip->type != T_FILE && ip->type != T_DEV){
+        iunlockput(ip);
+        return -1;
+    }
+
+    char *buf = kalloc();
+    if(!buf){
+        iunlockput(ip);
+        return -1;
+    }
+
+    char *line = kalloc();
+    if(!line){
+        kfree(buf);
+        iunlockput(ip);
+        return -1;
+    }
+
+    int offset = 0;
+    int res = -1;
+    int line_len = 0;
+
+    while(1){
+        int n = readi(ip, buf, offset, CHUNK);
+        if(n < 0)
+            break;
+
+        if(n == 0){
+            if(line_len > 0 && line_has_keyword(line, line_len, keyword)){
+                int copylen = (line_len < bufsz - 1) ? line_len : (bufsz - 1);
+
+                if(copyout(myproc()->pgdir, (uint)ubuf, line, copylen) >= 0){
+                    char z = 0;
+                    copyout(myproc()->pgdir, (uint)(ubuf + copylen), &z, 1);
+                    res = line_len;
+                }
+            }
+
+            break;
+        }
+
+        for(int i = 0; i < n; i++){
+            char c = buf[i];
+
+            if(c == '\n'){
+                if(line_has_keyword(line, line_len, keyword)){
+                    int copylen = (line_len < bufsz - 1) ? line_len : (bufsz - 1);
+
+                    if(copyout(myproc()->pgdir, (uint)ubuf, line, copylen) >= 0){
+                        char z = 0;
+                        copyout(myproc()->pgdir, (uint)(ubuf + copylen), &z, 1);
+                        res = line_len;
+                    }
+
+                    kfree(buf);
+                    kfree(line);
+                    iunlockput(ip);
+
+                    return res;
+                }
+
+                line_len = 0;
+            }
+            
+            else if(line_len < PGSIZE - 1){
+                line[line_len++] = c;
+            }
+        }
+
+        offset += n;
+    }
+
+    kfree(buf);
+    kfree(line);
+    iunlockput(ip);
+
+    return res;
 }

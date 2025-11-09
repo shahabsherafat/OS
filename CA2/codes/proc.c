@@ -7,6 +7,10 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define PRIO_MIN      2
+#define PRIO_MAX      0
+#define PRIO_DEFAULT  1
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -112,6 +116,8 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  p->priority = PRIO_DEFAULT;
+
   return p;
 }
 
@@ -188,6 +194,8 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  np->priority = curproc->priority;
 
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
@@ -322,7 +330,6 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
   
@@ -332,26 +339,42 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+
+    struct proc *p;
+    struct proc *highp = 0;    // Highest-priority process to run (lower number = higher priority)
+    int bestprio = 0x7fffffff; // Track the smallest priority value seen
+
+    // Modified scheduling: pick the RUNNABLE process with the highest priority
+    // (here: numerically smallest p->priority wins)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
 
+      // Select the process with the lowest p->priority value (higher actual priority)
+      if(p->priority < bestprio){
+        bestprio = p->priority;
+        highp = p;
+      }
+    }
+
+    // If there is at least one RUNNABLE process
+    if(highp){
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      c->proc = highp;
+      switchuvm(highp);
+      highp->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
+      swtch(&(c->scheduler), highp->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+    release(&ptable.lock);
   }
 }
 
@@ -582,3 +605,28 @@ process_family(int pid)
   release(&ptable.lock);
   return 0;
 }
+
+int
+set_priority(int pid, int new_priority)
+{
+  struct proc *p;
+  int old = -1;
+
+  if(new_priority > PRIO_MIN || new_priority < PRIO_MAX)
+    return -1;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      old = p->priority;
+      p->priority = new_priority;
+      break;
+    }
+  }
+
+  release(&ptable.lock);
+  return old;
+}
+
+
+
