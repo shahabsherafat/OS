@@ -334,7 +334,7 @@ scheduler(void)
   struct cpu *c = mycpu();
   c->proc = 0;
   
-  // تعیین نوع هسته: اگر شناسه زوج است E-Core، در غیر این صورت P-Core
+
   if (c->apicid % 2 == 0)
       c->core_type = 0; // E-Core
   else
@@ -347,7 +347,6 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     
-    // --- راهنمایی پیاده‌سازی: ریست کردن p به NULL (یا 0) ---
     p = 0;
 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -358,10 +357,6 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-      
-      // ریست کردن شمارنده تیک هنگام شروع اجرای مجدد پردازه (اختیاری، بسته به استراتژی)
-      // اما چون می‌خواهیم کوانتوم را نگه داریم، اینجا صفر نمی‌کنیم مگر اینکه زمان‌بند تصمیم دیگری بگیرد
-      // برای RR ساده معمولا در trap صفر می‌شود.
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
