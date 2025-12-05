@@ -56,6 +56,7 @@ struct proc {
 
   int tick_count;
   int total_tick_count;
+  uint creation_time;
 };
 
 // Process memory is laid out contiguously, low addresses first:

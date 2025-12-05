@@ -16,6 +16,9 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+extern struct spinlock tickslock;
+extern uint ticks;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -92,6 +95,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  acquire(&tickslock);
+  p->creation_time = ticks;   // زمان ایجاد پردازه بر حسب tick
+  release(&tickslock);
 
   release(&ptable.lock);
 
@@ -117,7 +123,9 @@ found:
   p->context->eip = (uint)forkret;
 
   p->priority = PRIO_DEFAULT;
-
+  p->tick_count = 0;
+  p->total_tick_count = 0;
+  
   return p;
 }
 
@@ -333,40 +341,67 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
 
+  // تعیین نوع هسته: E-Core (زوج) یا P-Core (فرد)
   if (c->apicid % 2 == 0)
-      c->core_type = 0; // E-Core
+    c->core_type = 0; // E-Core
   else
-      c->core_type = 1; // P-Core
+    c->core_type = 1; // P-Core
 
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    
-    p = 0;
 
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    if (c->core_type == 0) {
+      p = 0;
+      // ===== هسته‌های E: همان رفتار قبلی (تقریباً RR) =====
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
 
-      // Switch to chosen process.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+        // Switch to chosen process.
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
 
-      // Process is done running for now.
-      c->proc = 0;
+        // Process is done running for now.
+        c->proc = 0;
+      }
+    } else {
+      // ===== هسته‌های P: FCFS بر اساس زمان ایجاد (ctime) =====
+      struct proc *best = 0;
+
+      // پیدا کردن قدیمی‌ترین پردازه‌ی RUNNABLE
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
+
+        if(best == 0 || p->creation_time < best->creation_time)
+          best = p;
+      }
+
+      if(best != 0){
+        c->proc = best;
+        switchuvm(best);
+        best->state = RUNNING;
+
+        swtch(&(c->scheduler), best->context);
+        switchkvm();
+
+        c->proc = 0;
+      }
+      // اگر هیچ RUNNABLE نبود، فقط قفل آزاد می‌شود و حلقه ادامه پیدا می‌کند
     }
+
     release(&ptable.lock);
   }
 }
+
 
 
 // Enter scheduler.  Must hold only ptable.lock
