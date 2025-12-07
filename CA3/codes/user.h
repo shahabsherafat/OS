@@ -28,6 +28,8 @@ int show_process_family(int pid);
 int simple_arithmetic_syscall(int a, int b);
 int grep_syscall(const char*, const char*, char*, int);
 int set_priority_syscall(int pid, int priority);
+int start_throughput(void);
+int end_throughput(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

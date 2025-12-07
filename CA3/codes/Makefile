@@ -192,6 +192,7 @@ UPROGS=\
 	_priority_test\
 	_rrtest\
 	_test_fcfs\
+	_throughput\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

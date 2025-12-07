@@ -19,6 +19,10 @@ struct {
 extern struct spinlock tickslock;
 extern uint ticks;
 
+int is_measuring_throughput = 0;
+uint throughput_start_tick = 0;
+int throughput_finished_procs = 0;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -278,6 +282,11 @@ exit(void)
   }
 
   // Jump into the scheduler, never to return.
+  if(is_measuring_throughput){
+    if(curproc->pid > 2)
+      throughput_finished_procs++;
+  }
+
   curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");

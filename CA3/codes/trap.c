@@ -112,8 +112,8 @@ if(myproc() && myproc()->state == RUNNING &&
          myproc()->tick_count++;
          myproc()->total_tick_count++;
          
-         cprintf("Core-E (CPU %d): PID %d |  Ticks: %d/3 | total_ticks: %d\n", 
-                 cpuid(), myproc()->pid, myproc()->tick_count , myproc()->total_tick_count);
+        //  cprintf("Core-E (CPU %d): PID %d |  Ticks: %d/3 | total_ticks: %d\n", 
+        //          cpuid(), myproc()->pid, myproc()->tick_count , myproc()->total_tick_count);
 
          if (myproc()->tick_count >= 3) {
              myproc()->tick_count = 0;

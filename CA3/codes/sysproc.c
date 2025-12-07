@@ -126,3 +126,43 @@ sys_set_priority_syscall(void)
   return set_priority(pid, prio);
 }
 
+int
+sys_start_throughput(void)
+{
+  acquire(&tickslock);
+  throughput_start_tick = ticks;
+  release(&tickslock);
+
+  throughput_finished_procs = 0;
+  is_measuring_throughput = 1;
+
+  return 0;
+}
+
+int
+sys_end_throughput(void)
+{
+  uint start, end, diff;
+  int procs;
+
+  acquire(&tickslock);
+  start = throughput_start_tick;
+  end   = ticks;
+  release(&tickslock);
+
+  is_measuring_throughput = 0;
+
+  diff  = end - start;
+
+  if(diff == 0)
+    diff = 1;
+
+  int th_per_tick = throughput_finished_procs * 1000 / diff;
+
+  // cprintf("Throughput: %d procs in %d ticks (~%d procs/tick)\n",
+  //         throughput_finished_procs, diff, th_per_tick);
+
+  return th_per_tick;
+}
+
+
