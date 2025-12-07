@@ -14,7 +14,42 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+
+  struct proc *rq_head[NCPU];
+  struct proc *rq_tail[NCPU];
 } ptable;
+
+static void
+rq_enqueue(int cpu, struct proc *p)
+{
+  if(cpu < 0 || cpu >= ncpu)
+    cpu = 0;
+
+  p->next = 0;
+  if(ptable.rq_tail[cpu]){
+    ptable.rq_tail[cpu]->next = p;
+    ptable.rq_tail[cpu] = p;
+  } else {
+    ptable.rq_head[cpu] = p;
+    ptable.rq_tail[cpu] = p;
+  }
+}
+
+static struct proc*
+rq_dequeue(int cpu)
+{
+  if(cpu < 0 || cpu >= ncpu)
+    cpu = 0;
+
+  struct proc *p = ptable.rq_head[cpu];
+  if(p){
+    ptable.rq_head[cpu] = p->next;
+    if(ptable.rq_head[cpu] == 0)
+      ptable.rq_tail[cpu] = 0;
+    p->next = 0;
+  }
+  return p;
+}
 
 extern struct spinlock tickslock;
 extern uint ticks;
@@ -76,6 +111,21 @@ myproc(void) {
   return p;
 }
 
+static int
+cpu_id_for_queues(void)
+{
+  int id;
+  pushcli();
+  struct cpu *c = mycpu();
+  id = c - cpus;
+  popcli();
+
+  if(id < 0 || id >= ncpu)
+    id = 0;
+
+  return id;
+}
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -129,6 +179,8 @@ found:
   p->priority = PRIO_DEFAULT;
   p->tick_count = 0;
   p->total_tick_count = 0;
+
+  p->next = 0;
   
   return p;
 }
@@ -164,9 +216,12 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
+
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  int cid = cpu_id_for_queues();
+  rq_enqueue(cid, p);
 
   release(&ptable.lock);
 }
@@ -235,10 +290,13 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  int cid = cpu_id_for_queues();
+  rq_enqueue(cid, np);
 
   release(&ptable.lock);
 
   return pid;
+
 }
 
 // Exit the current process.  Does not return.
@@ -344,6 +402,7 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
 void
 scheduler(void)
 {
@@ -351,67 +410,68 @@ scheduler(void)
   struct cpu *c = mycpu();
   c->proc = 0;
 
-  // تعیین نوع هسته: E-Core (زوج) یا P-Core (فرد)
   if (c->apicid % 2 == 0)
     c->core_type = 0; // E-Core
   else
     c->core_type = 1; // P-Core
 
+  int cid = c - cpus;
+
   for(;;){
-    // Enable interrupts on this processor.
     sti();
 
     acquire(&ptable.lock);
 
     if (c->core_type == 0) {
-      p = 0;
-      // ===== هسته‌های E: همان رفتار قبلی (تقریباً RR) =====
-      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-          continue;
-
-        // Switch to chosen process.
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-
-        swtch(&(c->scheduler), p->context);
-        switchkvm();
-
-        // Process is done running for now.
-        c->proc = 0;
-      }
-    } else {
-      // ===== هسته‌های P: FCFS بر اساس زمان ایجاد (ctime) =====
+      p = rq_dequeue(cid);
+    }
+    
+    else {
+      // ===== هسته‌های P: FCFS بر اساس creation_time در صف خودشان =====
+      struct proc *cur = ptable.rq_head[cid];
       struct proc *best = 0;
+      struct proc *best_prev = 0;
+      struct proc *prev = 0;
 
-      // پیدا کردن قدیمی‌ترین پردازه‌ی RUNNABLE
-      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-          continue;
-
-        if(best == 0 || p->creation_time < best->creation_time)
-          best = p;
+      while(cur){
+        if(cur->state == RUNNABLE &&
+           (best == 0 || cur->creation_time < best->creation_time)){
+          best = cur;
+          best_prev = prev;
+        }
+        prev = cur;
+        cur = cur->next;
       }
 
-      if(best != 0){
-        c->proc = best;
-        switchuvm(best);
-        best->state = RUNNING;
+      p = best;
+      if(p){
+        // حذف best از صف
+        if(best_prev)
+          best_prev->next = best->next;
+        else
+          ptable.rq_head[cid] = best->next;
 
-        swtch(&(c->scheduler), best->context);
-        switchkvm();
+        if(ptable.rq_tail[cid] == best)
+          ptable.rq_tail[cid] = best_prev;
 
-        c->proc = 0;
+        p->next = 0;
       }
-      // اگر هیچ RUNNABLE نبود، فقط قفل آزاد می‌شود و حلقه ادامه پیدا می‌کند
+    }
+
+    if(p != 0){
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
     }
 
     release(&ptable.lock);
   }
 }
-
-
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -443,8 +503,14 @@ sched(void)
 void
 yield(void)
 {
-  acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  acquire(&ptable.lock);
+
+  struct proc *p = myproc();
+  p->state = RUNNABLE;
+
+  int cid = cpu_id_for_queues();
+  rq_enqueue(cid, p);
+
   sched();
   release(&ptable.lock);
 }
@@ -517,9 +583,14 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+  int cid = cpu_id_for_queues();  // پردازه‌های بیدارشده را به صف همین CPU اضافه کن
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      rq_enqueue(cid, p);
+    }
+  }
 }
 
 // Wake up all processes sleeping on chan.
@@ -544,8 +615,11 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING){
         p->state = RUNNABLE;
+        int cid = cpu_id_for_queues();
+        rq_enqueue(cid, p);
+      }
       release(&ptable.lock);
       return 0;
     }

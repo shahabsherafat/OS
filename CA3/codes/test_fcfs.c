@@ -1,65 +1,211 @@
+// test_pfcfs.c  - تست FCFS بر اساس زمان ایجاد روی P-core (cpuid فرد)
+// این برنامه فرض می‌کند سیستم با "qemu CPUS=2" اجرا شده است.
+
 #include "types.h"
 #include "stat.h"
 #include "user.h"
 #include "fcntl.h"
 
-// تابعی برای شبیه‌سازی بار کاری سنگین روی CPU
-void cpu_bound_task(int id) {
-    volatile double x = 0;
-    int start_time = uptime();
-    
-    // یک حلقه طولانی برای مصرف CPU. 
-    // این عدد ممکن است نیاز به تنظیم داشته باشد (مثلاً برای qemu سریعتر)
-    // اگر پروسه‌ها خیلی سریع تمام می‌شوند، این عدد را زیاد کنید.
-    for (double i = 0; i < 600000; i += 1) {
-        x = x + 3.14 * 89.64; 
+int fds[2];   // pipe برای بخش B
+
+// حلقه‌ی سنگین برای مصرف CPU
+void
+heavy_spin(int rounds)
+{
+  volatile int x = 0;
+  int i, j;
+  for(i = 0; i < rounds; i++){
+    for(j = 0; j < 100000; j++){
+      x += (i ^ j);
     }
-    
-    int end_time = uptime();
-    
-    printf(1, "Child %d (PID: %d) Finished. Start: %d, End: %d, Duration: %d ticks.\n", 
-           id, getpid(), start_time, end_time, end_time - start_time);
-    
-    exit();
+  }
 }
 
-int main(int argc, char *argv[]) {
-    int n = 8; // تعداد پروسه‌های فرزند
-    int pid;
+// ===================== بخش A: ترتیب پایان روی P-core =====================
 
-    printf(1, "Starting Scheduling Test with %d processes (Must run with 'qemu CPUS=2').\n", n);
-    printf(1, "------------------------------------------------------------------------\n");
-    printf(1, "Order of creation:\n");
-    
-    for (int i = 1; i <= n; i++) {
-        pid = fork();
-        
-        if (pid < 0) {
-            printf(1, "Fork failed\n");
-            break;
-        }
-        
-        if (pid == 0) {
-            // کد فرزند
-            // شروع کار سنگین
-            cpu_bound_task(i);
-        } else {
-            // کد والد
-            printf(1, " -> Created Child %d (PID: %d) at tick %d\n", i, pid, uptime());
-            // ایجاد یک وقفه کوچک (10 تیک) تا creation_time هر پروسه از بعدی مجزا شود.
-            sleep(10); 
-        }
+void
+test_simple_pcore_fcfs(void)
+{
+  int n = 8;           // تعداد بچه‌ها
+  int created_pids[8]; // pidهایی که روی P-core هستند (pid%2==1)
+  int created_idx = 0;
+  int i;
+
+  printf(1, "=== [A] Simple P-core FCFS test (no sleep) ===\n");
+
+  for(i = 0; i < n; i++){
+    int pid = fork();
+    if(pid < 0){
+      printf(1, "fork failed\n");
+      exit();
     }
 
-    printf(1, "------------------------------------------------------------------------\n");
-    printf(1, "Order of completion:\n");
+    if(pid == 0){
+      // کد فرزند
+      int mypid = getpid();
+      int start = uptime();
 
-    // والد منتظر می‌ماند تا همه فرزندان تمام شوند
-    for (int i = 0; i < n; i++) {
-        wait();
+      // فقط پردازه‌هایی که pid فرد دارند روی P-core می‌افتند
+      if(mypid % 2 == 1){
+        printf(1, "[P-core child] created (PID=%d), start=%d\n", mypid, start);
+        heavy_spin(200);  // کار سنگین مساوی برای همه‌ی بچه‌ها
+        printf(1, "[P-core child] PID=%d finished at %d\n", mypid, uptime());
+      } else {
+        // بچه‌های E-core برای این تست مهم نیستند، یک کار خیلی کوچک می‌کنند
+        heavy_spin(20);
+      }
+      exit();
+    } else {
+      // والد: فقط pidهای فرد (P-core) را در لیست creation نگه می‌دارد
+      if(pid % 2 == 1 && created_idx < 8){
+        created_pids[created_idx++] = pid;
+      }
     }
+  }
 
-    printf(1, "------------------------------------------------------------------------\n");
-    printf(1, "All children finished. Test done.\n");
+  // والد: جمع‌آوری همه‌ی بچه‌ها
+  for(i = 0; i < n; i++)
+    wait();
+
+  // چاپ ترتیب ایجاد بچه‌های P-core که really ساختیم
+  printf(1, "--- P-core children creation order (pid %% 2 == 1) ---\n");
+  for(i = 0; i < created_idx; i++){
+    printf(1, " #%d => PID %d\n", i, created_pids[i]);
+  }
+
+  printf(1, "=== [A] Simple P-core FCFS test done ===\n\n");
+}
+
+// ===================== بخش B: تست پیش‌گیرانه با pipe =====================
+// نسخه‌ی سبک‌تر B – فقط دو بچه روی P-core، کار خیلی کم
+
+void
+old_pcore_proc_light(void)
+{
+  int mypid = getpid();
+  char ch;
+  int i;
+
+  printf(1, "[OLD %d] (P-core) created FIRST, waiting on pipe...\n", mypid);
+
+  if(read(fds[0], &ch, 1) != 1){
+    printf(1, "[OLD %d] read failed\n", mypid);
     exit();
+  }
+
+  printf(1, "[OLD %d] WOKE UP, starting light work\n", mypid);
+
+  for(i = 0; i < 3; i++){
+    printf(1, "[OLD %d] working step %d\n", mypid, i);
+    heavy_spin(20);   // خیلی سبک
+  }
+
+  printf(1, "[OLD %d] finished work\n", mypid);
+  exit();
+}
+
+void
+new_pcore_proc_light(void)
+{
+  int mypid = getpid();
+  int i;
+
+  printf(1, "[NEW %d] (P-core) created SECOND, starting light work\n", mypid);
+
+  for(i = 0; i < 5; i++){
+    printf(1, "[NEW %d] working step %d\n", mypid, i);
+    heavy_spin(15);   // سبک
+  }
+
+  printf(1, "[NEW %d] finished work\n", mypid);
+  exit();
+}
+
+void
+test_preemptive_pcore_fcfs(void)
+{
+  int old_pid = -1, new_pid = -1;
+  int pid;
+
+  printf(1, "=== [B] Preemptive P-core FCFS PIPE test (light) ===\n");
+
+  if(pipe(fds) < 0){
+    printf(1, "pipe failed\n");
+    exit();
+  }
+
+  // ۱) پیدا کردن اولین بچه روی P-core برای OLD
+  while(old_pid < 0){
+    pid = fork();
+    if(pid < 0){
+      printf(1, "fork for OLD failed\n");
+      exit();
+    }
+    if(pid == 0){
+      int mypid = getpid();
+      if(mypid % 2 == 1){
+        old_pcore_proc_light();
+      } else {
+        exit();
+      }
+    } else {
+      if(pid % 2 == 1){
+        old_pid = pid;
+        printf(1, "[PARENT] OLD child on P-core has PID=%d\n", pid);
+      }
+    }
+  }
+
+  // کمی کار خیلی سبک
+  heavy_spin(50);
+
+  // ۲) پیدا کردن دومین بچه روی P-core برای NEW
+  while(new_pid < 0){
+    pid = fork();
+    if(pid < 0){
+      printf(1, "fork for NEW failed\n");
+      exit();
+    }
+    if(pid == 0){
+      int mypid = getpid();
+      if(mypid % 2 == 1){
+        new_pcore_proc_light();
+      } else {
+        exit();
+      }
+    } else {
+      if(pid % 2 == 1){
+        new_pid = pid;
+        printf(1, "[PARENT] NEW child on P-core has PID=%d\n", pid);
+      }
+    }
+  }
+
+  // اجازه بده NEW چند step کار کند
+  heavy_spin(200);
+
+  // ۳) بیدار کردن OLD
+  printf(1, "[PARENT] Waking up OLD (PID=%d) by writing to pipe\n", old_pid);
+  write(fds[1], "X", 1);
+
+  close(fds[0]);
+  close(fds[1]);
+
+  while(wait() > 0)
+    ;
+
+  printf(1, "=== [B] Preemptive P-core FCFS PIPE test (light) done ===\n\n");
+}
+
+
+int
+main(int argc, char *argv[])
+{
+  printf(1, "===== P-core FCFS validation program =====\n\n");
+
+  test_simple_pcore_fcfs();
+  test_preemptive_pcore_fcfs();
+
+  printf(1, "===== All tests finished. =====\n");
+  exit();
 }
