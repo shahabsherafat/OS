@@ -10,6 +10,7 @@ struct cpu {
   struct proc *proc;           // The process running on this cpu or null
 
   int core_type;
+  uint last_balance;
 };
 
 extern struct cpu cpus[NCPU];
@@ -62,6 +63,8 @@ struct proc {
   int total_tick_count;
   uint creation_time;
   struct proc *next;
+
+  int queue_id;
 };
 
 // Process memory is laid out contiguously, low addresses first:

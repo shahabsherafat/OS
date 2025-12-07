@@ -165,4 +165,12 @@ sys_end_throughput(void)
   return th_per_tick;
 }
 
+extern void print_process_info(struct proc *);
 
+int
+sys_print_process_info(void)
+{
+  struct proc *p = myproc();
+  print_process_info(p);
+  return 0;
+}

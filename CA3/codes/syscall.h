@@ -27,4 +27,5 @@
 #define SYS_set_priority_syscall 26
 #define SYS_start_throughput  27
 #define SYS_end_throughput    28
+#define SYS_print_process_info  29
 

@@ -110,6 +110,7 @@ extern int sys_grep_syscall(void);
 extern int sys_set_priority_syscall(void);
 extern int sys_start_throughput(void);
 extern int sys_end_throughput(void);
+extern int sys_print_process_info(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -140,6 +141,7 @@ static int (*syscalls[])(void) = {
 [SYS_set_priority_syscall] sys_set_priority_syscall,
 [SYS_start_throughput]  sys_start_throughput,
 [SYS_end_throughput]    sys_end_throughput,
+[SYS_print_process_info] sys_print_process_info,
 
 };
 

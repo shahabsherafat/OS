@@ -30,6 +30,7 @@ int grep_syscall(const char*, const char*, char*, int);
 int set_priority_syscall(int pid, int priority);
 int start_throughput(void);
 int end_throughput(void);
+int print_process_info(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

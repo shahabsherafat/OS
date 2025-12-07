@@ -10,6 +10,7 @@
 #define PRIO_MIN      2
 #define PRIO_MAX      0
 #define PRIO_DEFAULT  1
+#define BALANCE_INTERVAL_TICKS 5
 
 struct {
   struct spinlock lock;
@@ -17,6 +18,7 @@ struct {
 
   struct proc *rq_head[NCPU];
   struct proc *rq_tail[NCPU];
+  int rq_len[NCPU];
 } ptable;
 
 static void
@@ -29,10 +31,15 @@ rq_enqueue(int cpu, struct proc *p)
   if(ptable.rq_tail[cpu]){
     ptable.rq_tail[cpu]->next = p;
     ptable.rq_tail[cpu] = p;
-  } else {
+  }
+  
+  else{
     ptable.rq_head[cpu] = p;
     ptable.rq_tail[cpu] = p;
   }
+
+  p->queue_id = cpu;
+  ptable.rq_len[cpu]++;
 }
 
 static struct proc*
@@ -48,6 +55,8 @@ rq_dequeue(int cpu)
       ptable.rq_tail[cpu] = 0;
     p->next = 0;
   }
+
+  ptable.rq_len[cpu]--;
   return p;
 }
 
@@ -74,7 +83,7 @@ pinit(void)
 
 // Must be called with interrupts disabled
 int
-cpuid() {
+cpuid(){
   return mycpu()-cpus;
 }
 
@@ -91,7 +100,7 @@ mycpu(void)
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
-  for (i = 0; i < ncpu; ++i) {
+  for (i = 0; i < ncpu; ++i){
     if (cpus[i].apicid == apicid)
       return &cpus[i];
   }
@@ -101,7 +110,7 @@ mycpu(void)
 // Disable interrupts so that we are not rescheduled
 // while reading proc from the cpu structure
 struct proc*
-myproc(void) {
+myproc(void){
   struct cpu *c;
   struct proc *p;
   pushcli();
@@ -403,6 +412,58 @@ wait(void)
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
 
+static void
+rebalance_from_E_core(int e_id)
+{
+  int p_id = -1;
+  int min_len = 1000000;
+  int i;
+
+  // find lightest P-core
+  for(i = 0; i < ncpu; i++){
+    if(cpus[i].core_type != 1)
+      continue;
+
+    if(ptable.rq_len[i] < min_len){
+      min_len = ptable.rq_len[i];
+      p_id = i;
+    }
+  }
+
+  if(p_id < 0)
+    return;
+
+  int e_len = ptable.rq_len[e_id];
+  if(!(e_len >= min_len + 3))
+    return;
+
+  struct proc *cur = ptable.rq_head[e_id];
+  struct proc *prev = 0;
+
+  while(cur){
+    if(cur->state == RUNNABLE && cur->pid > 2)
+      break;
+    prev = cur;
+    cur = cur->next;
+  }
+
+  if(cur == 0)
+    return;
+
+  if(prev)
+    prev->next = cur->next;
+  else
+    ptable.rq_head[e_id] = cur->next;
+
+  if(ptable.rq_tail[e_id] == cur)
+    ptable.rq_tail[e_id] = prev;
+
+  cur->next = 0;
+  ptable.rq_len[e_id]--;
+
+  rq_enqueue(p_id, cur);
+}
+
 void
 scheduler(void)
 {
@@ -415,6 +476,8 @@ scheduler(void)
   else
     c->core_type = 1; // P-Core
 
+  c->last_balance = 0;
+
   int cid = c - cpus;
 
   for(;;){
@@ -422,11 +485,20 @@ scheduler(void)
 
     acquire(&ptable.lock);
 
-    if (c->core_type == 0) {
+    if (c->core_type == 0){
+      acquire(&tickslock);
+      uint now = ticks;
+      release(&tickslock);
+
+      if(now - c->last_balance >= BALANCE_INTERVAL_TICKS){
+        rebalance_from_E_core(cid);
+        c->last_balance = now;
+      }
+
       p = rq_dequeue(cid);
     }
     
-    else {
+    else{
       // ===== هسته‌های P: FCFS بر اساس creation_time در صف خودشان =====
       struct proc *cur = ptable.rq_head[cid];
       struct proc *best = 0;
@@ -445,7 +517,6 @@ scheduler(void)
 
       p = best;
       if(p){
-        // حذف best از صف
         if(best_prev)
           best_prev->next = best->next;
         else
@@ -455,6 +526,7 @@ scheduler(void)
           ptable.rq_tail[cid] = best_prev;
 
         p->next = 0;
+        ptable.rq_len[cid]--;
       }
     }
 
@@ -524,7 +596,7 @@ forkret(void)
   // Still holding ptable.lock from scheduler.
   release(&ptable.lock);
 
-  if (first) {
+  if (first){
     // Some initialization functions must be run in the context
     // of a regular process (e.g., they call sleep), and thus cannot
     // be run from main().
@@ -672,15 +744,15 @@ process_family(int pid)
 
   acquire(&ptable.lock);
 
-  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->state != UNUSED && p->pid == pid) {
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if (p->state != UNUSED && p->pid == pid){
       target = p;
       parent = p->parent;   // safe while ptable.lock is held
       break;
     }
   }
 
-  if (target == 0) {
+  if (target == 0){
     release(&ptable.lock);
     return -1;              // pid not found
   }
@@ -689,8 +761,8 @@ process_family(int pid)
 
   cprintf("Children of process %d:\n", target->pid);
   int have_child = 0;
-  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->state != UNUSED && p->parent == target) {
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if (p->state != UNUSED && p->parent == target){
       cprintf("Child pid: %d\n", p->pid);
       have_child = 1;
     }
@@ -700,9 +772,9 @@ process_family(int pid)
 
   cprintf("Siblings of process %d:\n", target->pid);
   int have_sib = 0;
-  if (parent) {
-    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-      if (p->state != UNUSED && p->parent == parent && p != target) {
+  if (parent){
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if (p->state != UNUSED && p->parent == parent && p != target){
         cprintf("Sibling pid: %d\n", p->pid);
         have_sib = 1;
       }
@@ -737,5 +809,46 @@ set_priority(int pid, int new_priority)
   return old;
 }
 
+void
+print_process_info(struct proc *p)
+{
+  uint now;
+
+  acquire(&tickslock);
+  now = ticks;
+  release(&tickslock);
+
+  char *states[] = {
+    [UNUSED]    "UNUSED",
+    [EMBRYO]    "EMBRYO",
+    [SLEEPING]  "SLEEPING",
+    [RUNNABLE]  "RUNNABLE",
+    [RUNNING]   "RUNNING",
+    [ZOMBIE]    "ZOMBIE"
+  };
+
+  char *st = "???";
+  if(p->state >= 0 && p->state < NELEM(states))
+    st = states[p->state];
+
+  int q = p->queue_id;
+  char *algo = "unknown";
+
+  if(q >= 0 && q < ncpu){
+    if(cpus[q].core_type == 0)
+      algo = "RR";
+    else
+      algo = "FCFS";
+  }
+
+  uint lifetime = now - p->creation_time;
+
+  cprintf("name: %s\n", p->name);
+  cprintf("pid: %d\n", p->pid);
+  cprintf("state: %s\n", st);
+  cprintf("queue: %d\n", q);
+  cprintf("algorithm: %s\n", algo);
+  cprintf("lifetime_ticks: %d\n", (int)lifetime);
+}
 
 

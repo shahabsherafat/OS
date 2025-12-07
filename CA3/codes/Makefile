@@ -193,6 +193,7 @@ UPROGS=\
 	_rrtest\
 	_test_fcfs\
 	_throughput\
+	_process_info\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
