@@ -54,9 +54,9 @@ rq_dequeue(int cpu)
     if(ptable.rq_head[cpu] == 0)
       ptable.rq_tail[cpu] = 0;
     p->next = 0;
+    ptable.rq_len[cpu]--;
   }
 
-  ptable.rq_len[cpu]--;
   return p;
 }
 
@@ -123,16 +123,21 @@ myproc(void){
 static int
 cpu_id_for_queues(void)
 {
-  int id;
-  pushcli();
-  struct cpu *c = mycpu();
-  id = c - cpus;
-  popcli();
+  int best = -1;
+  int i;
 
-  if(id < 0 || id >= ncpu)
-    id = 0;
+  for(i = 0; i < ncpu; i++){
+    if(i % 2 != 0)
+      continue;
 
-  return id;
+    if(best < 0 || ptable.rq_len[i] < ptable.rq_len[best])
+      best = i;
+  }
+
+  if(best < 0)
+    best = 0;
+
+  return best;
 }
 
 //PAGEBREAK: 32

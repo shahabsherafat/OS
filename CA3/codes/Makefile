@@ -190,10 +190,11 @@ UPROGS=\
 	_test_arith\
 	_test_grep\
 	_priority_test\
-	_rrtest\
-	_test_fcfs\
 	_throughput\
 	_process_info\
+	_rr_test\
+	_fcfs_test\
+
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
