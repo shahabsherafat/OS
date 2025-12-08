@@ -21,6 +21,41 @@ struct {
   int rq_len[NCPU];
 } ptable;
 
+// انتخاب E-core با کمترین طول صف آماده
+// فرض: با داشتن ptable.lock صدا زده می‌شود
+static int
+choose_e_core_min_load(void)
+{
+  int best = -1;
+
+  for(int i = 0; i < ncpu; i++){
+    // فقط E-Core ها
+    if(cpus[i].core_type != 0)
+      continue;
+
+    if(best < 0 || ptable.rq_len[i] < ptable.rq_len[best])
+      best = i;
+  }
+
+  // اگر هنوز هیچ core_type تنظیم نشده (اوایل boot)،
+  // همه core_type ها پیش‌فرض 0 هستند، پس حلقه بالا همه را E فرض می‌کند.
+  if(best < 0)
+    best = 0;
+
+  return best;
+}
+
+// انتخاب CPU برای پردازه‌های جدید / بیدارشده
+// فرض: با داشتن ptable.lock صدا زده می‌شود
+static int
+pick_cpu_for_new_proc(void)
+{
+  // پردازه‌های جدید / بیدارشده همیشه روی E-Core ای با کمترین load می‌روند
+  return choose_e_core_min_load();
+}
+
+
+
 static void
 rq_enqueue(int cpu, struct proc *p)
 {
@@ -123,22 +158,10 @@ myproc(void){
 static int
 cpu_id_for_queues(void)
 {
-  int best = -1;
-  int i;
-
-  for(i = 0; i < ncpu; i++){
-    if(i % 2 != 0)
-      continue;
-
-    if(best < 0 || ptable.rq_len[i] < ptable.rq_len[best])
-      best = i;
-  }
-
-  if(best < 0)
-    best = 0;
-
-  return best;
+  // برای yield / kill هم از همان معیار "E-Core با کمترین load" استفاده می‌کنیم
+  return choose_e_core_min_load();
 }
+
 
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
@@ -234,7 +257,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
-  int cid = cpu_id_for_queues();
+  int cid = pick_cpu_for_new_proc();
   rq_enqueue(cid, p);
 
   release(&ptable.lock);
@@ -304,7 +327,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  int cid = cpu_id_for_queues();
+  int cid = pick_cpu_for_new_proc();
   rq_enqueue(cid, np);
 
   release(&ptable.lock);
@@ -488,22 +511,25 @@ scheduler(void)
   for(;;){
     sti();
 
+    // ---- فقط برای E-core ها: خواندن ticks خارج از ptable.lock ----
+    uint now = 0;
+    if(c->core_type == 0){
+      acquire(&tickslock);
+      now = ticks;
+      release(&tickslock);
+    }
+
     acquire(&ptable.lock);
 
     if (c->core_type == 0){
-      acquire(&tickslock);
-      uint now = ticks;
-      release(&tickslock);
-
+      // اینجا دیگر tickslock نداریم؛ فقط با ptable کار می‌کنیم
       if(now - c->last_balance >= BALANCE_INTERVAL_TICKS){
         rebalance_from_E_core(cid);
         c->last_balance = now;
       }
 
       p = rq_dequeue(cid);
-    }
-    
-    else{
+    } else {
       // ===== هسته‌های P: FCFS بر اساس creation_time در صف خودشان =====
       struct proc *cur = ptable.rq_head[cid];
       struct proc *best = 0;
@@ -585,12 +611,18 @@ yield(void)
   struct proc *p = myproc();
   p->state = RUNNABLE;
 
-  int cid = cpu_id_for_queues();
+  int cid = p->queue_id;
+  if(cid < 0 || cid >= ncpu){
+    // اگر queue_id تا الان تنظیم نشده بود، یک E-core خوب انتخاب کن
+    cid = choose_e_core_min_load();
+  }
+
   rq_enqueue(cid, p);
 
   sched();
   release(&ptable.lock);
 }
+
 
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
@@ -660,14 +692,14 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  int cid = cpu_id_for_queues();  // پردازه‌های بیدارشده را به صف همین CPU اضافه کن
-
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == SLEEPING && p->chan == chan){
-      p->state = RUNNABLE;
-      rq_enqueue(cid, p);
-    }
+  if(p->state == SLEEPING && p->chan == chan){
+    p->state = RUNNABLE;
+    int cid = pick_cpu_for_new_proc();
+    rq_enqueue(cid, p);
   }
+}
+
 }
 
 // Wake up all processes sleeping on chan.
@@ -693,10 +725,11 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING){
-        p->state = RUNNABLE;
-        int cid = cpu_id_for_queues();
-        rq_enqueue(cid, p);
-      }
+  p->state = RUNNABLE;
+  int cid = pick_cpu_for_new_proc();
+  rq_enqueue(cid, p);
+}
+
       release(&ptable.lock);
       return 0;
     }
