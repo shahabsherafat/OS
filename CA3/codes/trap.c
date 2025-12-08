@@ -107,6 +107,7 @@ if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER) {
      
      struct cpu *c = mycpu();
+    //  cprintf("proc %d cpu core: %d\n", myproc()->pid, cpuid());
      
      if (cpuid() % 2 == 0) { // E-Core
          myproc()->tick_count++;
