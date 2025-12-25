@@ -6,6 +6,10 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "sleeplock.h"
+
+static struct sleeplock testlk;
+static int testlk_inited = 0;
 
 int
 sys_fork(void)
@@ -126,3 +130,37 @@ sys_set_priority_syscall(void)
   return set_priority(pid, prio);
 }
 
+int
+sys_sleeplock_test(void)
+{
+  int pid;
+
+  if(!testlk_inited){
+    initsleeplock(&testlk, "testlk");
+    testlk_inited = 1;
+  }
+
+  // Parent takes the lock
+  acquiresleep(&testlk);
+
+  pid = fork();
+  if(pid < 0){
+    releasesleep(&testlk);
+    return -1;
+  }
+
+  if(pid == 0){
+    // Child tries to release parent's lock -> should panic now
+    releasesleep(&testlk);
+
+    // If we reach here, the protection failed.
+    exit();
+  }
+
+  // Parent waits (in a correct system, it will never reach after panic,
+  // but if you change policy to "print+return", then it will)
+  wait();
+
+  releasesleep(&testlk);
+  return 0;
+}

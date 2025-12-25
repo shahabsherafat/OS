@@ -192,6 +192,7 @@ UPROGS=\
 	_test_arith\
 	_test_grep\
 	_priority_test\
+	_sleeplock_test\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

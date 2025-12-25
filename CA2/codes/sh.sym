@@ -52,7 +52,7 @@
 0000130b fork
 0000139b sbrk
 000013ab uptime
-00001f80 __bss_start
+00001f76 __bss_start
 00001180 memset
 00000000 main
 000013cb grep_syscall

@@ -54,7 +54,7 @@
 000038db fork
 0000396b sbrk
 0000397b uptime
-00005e60 __bss_start
+00005e50 __bss_start
 00003750 memset
 00000840 createtest
 00000000 main
