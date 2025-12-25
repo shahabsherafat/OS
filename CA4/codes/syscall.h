@@ -27,4 +27,7 @@
 #define SYS_set_priority_syscall 26
 #define SYS_sleeplock_hold  27
 #define SYS_sleeplock_drop  28
-
+#define SYS_rwlock_rlock    29
+#define SYS_rwlock_runlock  30
+#define SYS_rwlock_wlock    31
+#define SYS_rwlock_wunlock  32

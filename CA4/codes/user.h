@@ -30,6 +30,10 @@ int grep_syscall(const char*, const char*, char*, int);
 int set_priority_syscall(int pid, int priority);
 int sleeplock_hold(void);
 int sleeplock_drop(void);
+int rwlock_rlock(void);
+int rwlock_runlock(void);
+int rwlock_wlock(void);
+int rwlock_wunlock(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

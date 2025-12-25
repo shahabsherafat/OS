@@ -110,6 +110,10 @@ extern int sys_grep_syscall(void);
 extern int sys_set_priority_syscall(void);
 extern int sys_sleeplock_hold(void);
 extern int sys_sleeplock_drop(void);
+extern int sys_rwlock_rlock(void);
+extern int sys_rwlock_runlock(void);
+extern int sys_rwlock_wlock(void);
+extern int sys_rwlock_wunlock(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -140,6 +144,12 @@ static int (*syscalls[])(void) = {
 [SYS_set_priority_syscall] sys_set_priority_syscall,
 [SYS_sleeplock_hold] sys_sleeplock_hold,
 [SYS_sleeplock_drop] sys_sleeplock_drop,
+[SYS_rwlock_rlock]   sys_rwlock_rlock,
+[SYS_rwlock_runlock] sys_rwlock_runlock,
+[SYS_rwlock_wlock]   sys_rwlock_wlock,
+[SYS_rwlock_wunlock] sys_rwlock_wunlock,
+
+
 
 };
 

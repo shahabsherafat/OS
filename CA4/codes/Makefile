@@ -17,6 +17,7 @@ OBJS = \
 	proc.o\
 	sleeplock.o\
 	spinlock.o\
+	rwlock.o\
 	string.o\
 	swtch.o\
 	syscall.o\
@@ -193,6 +194,8 @@ UPROGS=\
 	_test_grep\
 	_priority_test\
 	_sleeplock_test\
+	_rwtest\
+
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
