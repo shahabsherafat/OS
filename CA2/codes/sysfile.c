@@ -566,7 +566,7 @@ int sys_grep_syscall(void){
 
     if(argstr(0, &keyword) < 0)
         return -1;
-    if((1, &filename) < 0)
+    if(argstr(1, &filename) < 0)
         return -1;
     if(argint(3, &bufsz) < 0 || bufsz <= 1)
         return -1;

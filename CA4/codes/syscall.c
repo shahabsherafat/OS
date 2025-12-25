@@ -108,7 +108,8 @@ extern int sys_show_process_family(void);
 extern int sys_simple_arithmetic(void);
 extern int sys_grep_syscall(void);
 extern int sys_set_priority_syscall(void);
-extern int sys_sleeplock_test(void);
+extern int sys_sleeplock_hold(void);
+extern int sys_sleeplock_drop(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -137,7 +138,8 @@ static int (*syscalls[])(void) = {
 [SYS_simple_arithmetic_syscall] sys_simple_arithmetic,
 [SYS_grep_syscall] sys_grep_syscall,
 [SYS_set_priority_syscall] sys_set_priority_syscall,
-[SYS_sleeplock_test]   sys_sleeplock_test,
+[SYS_sleeplock_hold] sys_sleeplock_hold,
+[SYS_sleeplock_drop] sys_sleeplock_drop,
 
 };
 

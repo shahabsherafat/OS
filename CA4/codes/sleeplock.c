@@ -60,5 +60,27 @@ holdingsleep(struct sleeplock *lk)
   return r;
 }
 
+static struct sleeplock testlk;
+static int testlk_inited = 0;
 
+int
+sys_sleeplock_hold(void)
+{
+  if(!testlk_inited){
+    initsleeplock(&testlk, "testlk");
+    testlk_inited = 1;
+  }
+  acquiresleep(&testlk);
+  return 0;
+}
 
+int
+sys_sleeplock_drop(void)
+{
+  if(!testlk_inited){
+    initsleeplock(&testlk, "testlk");
+    testlk_inited = 1;
+  }
+  releasesleep(&testlk);
+  return 0;
+}

@@ -51,8 +51,9 @@ strcpy(char *s, const char *t)
   31:	89 c8                	mov    %ecx,%eax
   33:	c9                   	leave
   34:	c3                   	ret
-  35:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
-  3c:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
+  35:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+  3c:	00 
+  3d:	8d 76 00             	lea    0x0(%esi),%esi
 
 00000040 <strcmp>:
 
@@ -69,8 +70,7 @@ strcmp(const char *p, const char *q)
   4d:	84 c0                	test   %al,%al
   4f:	75 17                	jne    68 <strcmp+0x28>
   51:	eb 3a                	jmp    8d <strcmp+0x4d>
-  53:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
-  57:	90                   	nop
+  53:	2e 8d 74 26 00       	lea    %cs:0x0(%esi,%eiz,1),%esi
   58:	0f b6 42 01          	movzbl 0x1(%edx),%eax
     p++, q++;
   5c:	83 c2 01             	add    $0x1,%edx
@@ -88,8 +88,9 @@ strcmp(const char *p, const char *q)
   71:	8b 5d fc             	mov    -0x4(%ebp),%ebx
   74:	c9                   	leave
   75:	c3                   	ret
-  76:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
-  7d:	8d 76 00             	lea    0x0(%esi),%esi
+  76:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+  7d:	00 
+  7e:	66 90                	xchg   %ax,%ax
   return (uchar)*p - (uchar)*q;
   80:	0f b6 59 01          	movzbl 0x1(%ecx),%ebx
   84:	31 c0                	xor    %eax,%eax
@@ -102,9 +103,9 @@ strcmp(const char *p, const char *q)
   8d:	0f b6 19             	movzbl (%ecx),%ebx
   90:	31 c0                	xor    %eax,%eax
   92:	eb db                	jmp    6f <strcmp+0x2f>
-  94:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
-  9b:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
-  9f:	90                   	nop
+  94:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+  9b:	00 
+  9c:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
 
 000000a0 <strlen>:
 
@@ -138,8 +139,9 @@ strlen(const char *s)
   c2:	5d                   	pop    %ebp
   c3:	89 c8                	mov    %ecx,%eax
   c5:	c3                   	ret
-  c6:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
-  cd:	8d 76 00             	lea    0x0(%esi),%esi
+  c6:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+  cd:	00 
+  ce:	66 90                	xchg   %ax,%ax
 
 000000d0 <memset>:
 
@@ -184,8 +186,7 @@ strchr(const char *s, char c)
   fd:	84 d2                	test   %dl,%dl
   ff:	75 12                	jne    113 <strchr+0x23>
  101:	eb 1d                	jmp    120 <strchr+0x30>
- 103:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 107:	90                   	nop
+ 103:	2e 8d 74 26 00       	lea    %cs:0x0(%esi,%eiz,1),%esi
  108:	0f b6 50 01          	movzbl 0x1(%eax),%edx
  10c:	83 c0 01             	add    $0x1,%eax
  10f:	84 d2                	test   %dl,%dl
@@ -204,9 +205,9 @@ strchr(const char *s, char c)
 }
  122:	5d                   	pop    %ebp
  123:	c3                   	ret
- 124:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 12b:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 12f:	90                   	nop
+ 124:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 12b:	00 
+ 12c:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
 
 00000130 <gets>:
 
@@ -233,8 +234,9 @@ gets(char *buf, int max)
   for(i=0; i+1 < max; ){
  141:	3b 75 0c             	cmp    0xc(%ebp),%esi
  144:	7d 3b                	jge    181 <gets+0x51>
- 146:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 14d:	8d 76 00             	lea    0x0(%esi),%esi
+ 146:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 14d:	00 
+ 14e:	66 90                	xchg   %ax,%ax
     cc = read(0, &c, 1);
  150:	83 ec 04             	sub    $0x4,%esp
  153:	6a 01                	push   $0x1
@@ -331,8 +333,9 @@ stat(const char *n, struct stat *st)
     return -1;
  1e0:	be ff ff ff ff       	mov    $0xffffffff,%esi
  1e5:	eb ed                	jmp    1d4 <stat+0x34>
- 1e7:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 1ee:	66 90                	xchg   %ax,%ax
+ 1e7:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 1ee:	00 
+ 1ef:	90                   	nop
 
 000001f0 <atoi>:
 
@@ -354,8 +357,9 @@ atoi(const char *s)
  200:	b9 00 00 00 00       	mov    $0x0,%ecx
   while('0' <= *s && *s <= '9')
  205:	77 1e                	ja     225 <atoi+0x35>
- 207:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 20e:	66 90                	xchg   %ax,%ax
+ 207:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 20e:	00 
+ 20f:	90                   	nop
     n = n*10 + *s++ - '0';
  210:	83 c2 01             	add    $0x1,%edx
  213:	8d 0c 89             	lea    (%ecx,%ecx,4),%ecx
@@ -396,8 +400,9 @@ memmove(void *vdst, const void *vsrc, int n)
  242:	01 d0                	add    %edx,%eax
   dst = vdst;
  244:	89 d7                	mov    %edx,%edi
- 246:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 24d:	8d 76 00             	lea    0x0(%esi),%esi
+ 246:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 24d:	00 
+ 24e:	66 90                	xchg   %ax,%ax
     *dst++ = *src++;
  250:	a4                   	movsb  %ds:(%esi),%es:(%edi)
   while(n-- > 0)
@@ -700,8 +705,7 @@ printf(int fd, const char *fmt, ...)
  3ec:	31 d2                	xor    %edx,%edx
  3ee:	89 4d d0             	mov    %ecx,-0x30(%ebp)
  3f1:	eb 34                	jmp    427 <printf+0x57>
- 3f3:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 3f7:	90                   	nop
+ 3f3:	2e 8d 74 26 00       	lea    %cs:0x0(%esi,%eiz,1),%esi
  3f8:	89 55 d4             	mov    %edx,-0x2c(%ebp)
     c = fmt[i] & 0xff;
     if(state == 0){
@@ -744,8 +748,7 @@ printf(int fd, const char *fmt, ...)
  43f:	83 f8 15             	cmp    $0x15,%eax
  442:	77 1c                	ja     460 <printf+0x90>
  444:	ff 24 85 e0 06 00 00 	jmp    *0x6e0(,%eax,4)
- 44b:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 44f:	90                   	nop
+ 44b:	2e 8d 74 26 00       	lea    %cs:0x0(%esi,%eiz,1),%esi
         putc(fd, c);
       }
       state = 0;
@@ -758,8 +761,8 @@ printf(int fd, const char *fmt, ...)
  455:	5f                   	pop    %edi
  456:	5d                   	pop    %ebp
  457:	c3                   	ret
- 458:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 45f:	90                   	nop
+ 458:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 45f:	00 
   write(fd, &c, 1);
  460:	83 ec 04             	sub    $0x4,%esp
  463:	8d 55 e7             	lea    -0x19(%ebp),%edx
@@ -1111,8 +1114,8 @@ malloc(uint nbytes)
  6c0:	00 00 00 
     if(p->s.size >= nunits){
  6c3:	e9 54 ff ff ff       	jmp    61c <malloc+0x2c>
- 6c8:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 6cf:	90                   	nop
+ 6c8:	2e 8d b4 26 00 00 00 	lea    %cs:0x0(%esi,%eiz,1),%esi
+ 6cf:	00 
         prevp->s.ptr = p->s.ptr;
  6d0:	8b 08                	mov    (%eax),%ecx
  6d2:	89 0a                	mov    %ecx,(%edx)
