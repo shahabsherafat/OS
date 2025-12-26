@@ -16,6 +16,7 @@ OBJS = \
 	pipe.o\
 	proc.o\
 	sleeplock.o\
+	plock.o\
 	spinlock.o\
 	rwlock.o\
 	string.o\
@@ -195,6 +196,7 @@ UPROGS=\
 	_priority_test\
 	_sleeplock_test\
 	_rwtest\
+	_plock_demo\
 
 
 fs.img: mkfs README $(UPROGS)

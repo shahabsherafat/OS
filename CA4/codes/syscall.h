@@ -31,3 +31,6 @@
 #define SYS_rwlock_runlock  30
 #define SYS_rwlock_wlock    31
 #define SYS_rwlock_wunlock  32
+#define SYS_acquire_plock_sys 33
+#define SYS_release_plock_sys  34
+

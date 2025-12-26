@@ -6,6 +6,8 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "plock.h"
+
 
 int
 sys_fork(void)
@@ -126,3 +128,19 @@ sys_set_priority_syscall(void)
   return set_priority(pid, prio);
 }
 
+int
+sys_acquire_plock_sys(void)
+{
+  int pr;
+  if(argint(0, &pr) < 0)
+    return -1;
+  plock_acquire(&plock_global, pr);
+  return 0;
+}
+
+int
+sys_release_plock_sys(void)
+{
+  release_plock(&plock_global);
+  return 0;
+}

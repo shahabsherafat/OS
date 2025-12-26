@@ -9,6 +9,8 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct plock;
+
 
 // bio.c
 void            binit(void);
@@ -196,6 +198,11 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+
+// plock.c
+void init_plock(struct plock*);
+void plock_acquire(struct plock*, int);
+void release_plock(struct plock*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

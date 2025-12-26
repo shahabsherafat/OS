@@ -34,6 +34,8 @@ int rwlock_rlock(void);
 int rwlock_runlock(void);
 int rwlock_wlock(void);
 int rwlock_wunlock(void);
+int acquire_plock_sys(int priority);
+int release_plock_sys(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

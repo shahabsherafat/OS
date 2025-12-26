@@ -40,3 +40,6 @@ SYSCALL(rwlock_rlock)
 SYSCALL(rwlock_runlock)
 SYSCALL(rwlock_wlock)
 SYSCALL(rwlock_wunlock)
+SYSCALL(acquire_plock_sys)
+SYSCALL(release_plock_sys)
+
