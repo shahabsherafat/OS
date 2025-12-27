@@ -43,3 +43,7 @@ SYSCALL(rwlock_wunlock)
 SYSCALL(acquire_plock_sys)
 SYSCALL(release_plock_sys)
 
+SYSCALL(getlockstat)
+
+
+

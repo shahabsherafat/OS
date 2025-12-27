@@ -117,6 +117,9 @@ extern int sys_rwlock_wunlock(void);
 extern int sys_acquire_plock_sys(void);
 extern int sys_release_plock_sys(void);
 
+extern int sys_getlockstat(void);
+
+
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -153,6 +156,9 @@ static int (*syscalls[])(void) = {
 [SYS_rwlock_wunlock] sys_rwlock_wunlock,
 [SYS_acquire_plock_sys]  sys_acquire_plock_sys,
 [SYS_release_plock_sys]  sys_release_plock_sys,
+
+
+[SYS_getlockstat] sys_getlockstat,
 
 
 

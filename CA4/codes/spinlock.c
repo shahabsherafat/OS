@@ -12,6 +12,13 @@
 void
 initlock(struct spinlock *lk, char *name)
 {
+
+    
+  for(int i = 0; i < NCPU; i++) {
+    lk->count_acq[i] = 0;
+    lk->spins_total[i] = 0;
+  }
+
   lk->name = name;
   lk->locked = 0;
   lk->cpu = 0;
@@ -29,8 +36,11 @@ acquire(struct spinlock *lk)
     panic("acquire");
 
   // The xchg is atomic.
-  while(xchg(&lk->locked, 1) != 0)
-    ;
+  uint spins = 0;
+
+  while(xchg(&lk->locked, 1) != 0) {
+    spins++; 
+  }
 
   // Tell the C compiler and the processor to not move loads or stores
   // past this point, to ensure that the critical section's memory
@@ -40,6 +50,10 @@ acquire(struct spinlock *lk)
   // Record info about lock acquisition for debugging.
   lk->cpu = mycpu();
   getcallerpcs(&lk, lk->pcs);
+
+  int id = cpuid(); 
+  lk->count_acq[id]++;
+  lk->spins_total[id] += spins;
 }
 
 // Release the lock.

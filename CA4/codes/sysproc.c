@@ -144,3 +144,23 @@ sys_release_plock_sys(void)
   release_plock(&plock_global);
   return 0;
 }
+
+
+extern struct spinlock tickslock;
+
+int
+sys_getlockstat(void)
+{
+  uint *score_ptr;
+  if(argptr(0, (char**)&score_ptr, NCPU * sizeof(uint)) < 0)
+    return -1;
+
+  for(int i = 0; i < NCPU; i++){
+    if(tickslock.count_acq[i] == 0)
+      score_ptr[i] = 0;
+    else
+
+      score_ptr[i] = tickslock.spins_total[i] / tickslock.count_acq[i];
+  }
+  return 0;
+}

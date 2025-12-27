@@ -37,6 +37,10 @@ int rwlock_wunlock(void);
 int acquire_plock_sys(int priority);
 int release_plock_sys(void);
 
+int getlockstat(uint *score);
+
+
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
