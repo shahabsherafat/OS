@@ -18,6 +18,14 @@ struct buf*     bread(uint, uint);
 void            brelse(struct buf*);
 void            bwrite(struct buf*);
 
+// cpt.c (Central Page Table)
+void            cpt_init(void);
+int             cpt_lookup(int pid, uint vpn);
+int             cpt_find_free(void);
+void            cpt_invalidate_pid(int pid);
+void            cpt_dump(void);
+
+
 // console.c
 void            consoleinit(void);
 void            cprintf(char*, ...);
@@ -206,3 +214,4 @@ void release_plock(struct plock*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+

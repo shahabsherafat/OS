@@ -254,7 +254,10 @@ exit(void)
   iput(curproc->cwd);
   end_op();
   curproc->cwd = 0;
-
+  // if this process owns any CPT entries, invalidate them now
+  // we do this before taking ptable.lock to avoid lock-order issues
+  
+  cpt_invalidate_pid(curproc->pid);
   acquire(&ptable.lock);
 
   // Parent might be sleeping in wait().

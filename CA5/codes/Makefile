@@ -1,5 +1,6 @@
 OBJS = \
 	bio.o\
+	cpt.o\
 	console.o\
 	exec.o\
 	file.o\
