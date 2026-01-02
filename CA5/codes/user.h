@@ -39,6 +39,10 @@ int release_plock_sys(void);
 
 int getlockstat(uint *score);
 
+int vread(void *addr);
+int vwrite(void *addr, int value);
+
+
 
 
 // ulib.c

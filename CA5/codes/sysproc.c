@@ -7,6 +7,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "plock.h"
+#include "cpt.h"
 
 
 int
@@ -162,5 +163,27 @@ sys_getlockstat(void)
 
       score_ptr[i] = tickslock.spins_total[i] / tickslock.count_acq[i];
   }
+  return 0;
+}
+
+int
+sys_vread(void)
+{
+  int addr, value;
+  if(argint(0, &addr) < 0)
+    return -1;
+  if(cpt_read_int(myproc(), (uint)addr, &value) < 0)
+    return -1;
+  return value;
+}
+
+int
+sys_vwrite(void)
+{
+  int addr, value;
+  if(argint(0, &addr) < 0) return -1;
+  if(argint(1, &value) < 0) return -1;
+  if(cpt_write_int(myproc(), (uint)addr, value) < 0)
+    return -1;
   return 0;
 }

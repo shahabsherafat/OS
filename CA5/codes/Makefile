@@ -199,7 +199,7 @@ UPROGS=\
 	_rwtest\
 	_plock_demo\
 	_locktest\
-
+	_vtest\
 
 
 fs.img: mkfs README $(UPROGS)

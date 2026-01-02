@@ -4,10 +4,11 @@
 // Central Page Table (CPT): a tiny, global 4-frame cache of pages.
 
 #include "types.h"
-#include "param.h"
 #include "spinlock.h"
 
 #define CPT_SIZE 4
+
+struct proc;
 
 struct cpt_entry {
   int   valid;   // 0 = empty, 1 = contains a (pid,vpn) page
@@ -34,5 +35,8 @@ int  cpt_find_free(void);
 void cpt_invalidate_pid(int pid);
 // This is added for debugging
 void cpt_dump(void);
+
+int cpt_vread(struct proc *p, uint va, int *out);
+int cpt_vwrite(struct proc *p, uint va, int value);
 
 #endif

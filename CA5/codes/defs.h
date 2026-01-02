@@ -24,6 +24,9 @@ int             cpt_lookup(int pid, uint vpn);
 int             cpt_find_free(void);
 void            cpt_invalidate_pid(int pid);
 void            cpt_dump(void);
+struct proc;
+int cpt_read_int(struct proc *p, uint user_va, int *out);
+int cpt_write_int(struct proc *p, uint user_va, int value);
 
 
 // console.c

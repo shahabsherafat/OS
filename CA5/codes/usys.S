@@ -45,5 +45,9 @@ SYSCALL(release_plock_sys)
 
 SYSCALL(getlockstat)
 
+SYSCALL(vread)
+SYSCALL(vwrite)
+
+
 
 

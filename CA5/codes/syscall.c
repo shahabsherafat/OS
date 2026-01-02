@@ -119,6 +119,10 @@ extern int sys_release_plock_sys(void);
 
 extern int sys_getlockstat(void);
 
+extern int sys_vread(void);
+extern int sys_vwrite(void);
+
+
 
 
 static int (*syscalls[])(void) = {
@@ -159,6 +163,10 @@ static int (*syscalls[])(void) = {
 
 
 [SYS_getlockstat] sys_getlockstat,
+
+[SYS_vread]   sys_vread,
+[SYS_vwrite]  sys_vwrite,
+
 
 
 
