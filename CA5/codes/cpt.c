@@ -156,18 +156,19 @@ cpt_get_slot_for_page(struct proc *p, uint vpn)
   char *kpage = user_va_page_to_kva(p, user_va_page);
   int slot;
 
-  if(kpage == 0)
+  if (kpage == 0)
     return -1;
 
   acquire(&g_cpt.lock);
 
-  if(p->pid == stats_pid)
+  if (p->pid == stats_pid)
     g_stats.accesses++;
 
   // HIT?
   slot = cpt_lookup_nolock(p->pid, vpn);
-  if(slot >= 0){
-    if(p->pid == stats_pid)
+  if (slot >= 0)
+  {
+    if (p->pid == stats_pid)
       g_stats.hits++;
     cpt_touch_slot_nolock(slot);
     release(&g_cpt.lock);
@@ -175,14 +176,15 @@ cpt_get_slot_for_page(struct proc *p, uint vpn)
   }
 
   // MISS
-  if(p->pid == stats_pid)
+  if (p->pid == stats_pid)
     g_stats.misses++;
 
   slot = cpt_find_free_nolock();
 
-  if(slot < 0){
+  if (slot < 0)
+  {
     // FULL => eviction
-    if(p->pid == stats_pid)
+    if (p->pid == stats_pid)
       g_stats.evictions++;
 
     slot = cpt_pick_victim_nolock();
@@ -190,15 +192,14 @@ cpt_get_slot_for_page(struct proc *p, uint vpn)
 
   memmove(g_cpt.e[slot].frame, kpage, PGSIZE);
   g_cpt.e[slot].valid = 1;
-  g_cpt.e[slot].pid   = p->pid;
-  g_cpt.e[slot].vpn   = vpn;
+  g_cpt.e[slot].pid = p->pid;
+  g_cpt.e[slot].vpn = vpn;
 
   cpt_init_slot_meta_nolock(slot);
 
   release(&g_cpt.lock);
   return slot;
 }
-
 
 int cpt_read_int(struct proc *p, uint user_va, int *out)
 {
@@ -251,6 +252,7 @@ int cpt_write_int(struct proc *p, uint user_va, int value)
   // write CPT copy
   acquire(&g_cpt.lock);
   memmove(g_cpt.e[slot].frame + off, &value, 4);
+  cpt_touch_slot_nolock(slot); // <-- اضافه کن
   release(&g_cpt.lock);
 
   // write-through to real user page (Part 2 simplicity)
@@ -349,26 +351,23 @@ cpt_pick_victim_nolock(void)
   }
 }
 
-void
-cpt_set_policy(int policy)
+void cpt_set_policy(int policy)
 {
   acquire(&g_cpt.lock);
   cpt_policy = policy;
+  g_cpt.clock_hand = 0;
+  cpt_stamp = 1;
   release(&g_cpt.lock);
 }
 
-void
-cpt_reset_stats(int pid)
+void cpt_reset_stats(int pid)
 {
   acquire(&g_cpt.lock);
 
   // flush CPT entries for this pid for fair benchmarking
   int i;
-  for(i = 0; i < CPT_SIZE; i++){
-    if(g_cpt.e[i].valid && g_cpt.e[i].pid == pid){
-      entry_reset(&g_cpt.e[i]);
-    }
-  }
+  for (i = 0; i < CPT_SIZE; i++)
+    entry_reset(&g_cpt.e[i]);
 
   // reset meta
   g_cpt.clock_hand = 0;
@@ -385,13 +384,10 @@ cpt_reset_stats(int pid)
   release(&g_cpt.lock);
 }
 
-
-void
-cpt_get_stats(struct cpt_stats *out)
+void cpt_get_stats(struct cpt_stats *out)
 {
   acquire(&g_cpt.lock);
   g_stats.policy = cpt_policy;
   *out = g_stats;
   release(&g_cpt.lock);
 }
-
