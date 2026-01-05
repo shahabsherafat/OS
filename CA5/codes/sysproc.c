@@ -187,3 +187,36 @@ sys_vwrite(void)
     return -1;
   return 0;
 }
+
+int
+sys_cptsetpolicy(void)
+{
+  int pol;
+  if(argint(0, &pol) < 0)
+    return -1;
+  cpt_set_policy(pol);
+  return 0;
+}
+
+int
+sys_cptresetstats(void)
+{
+  struct proc *p = myproc();
+  cpt_reset_stats(p->pid);
+  return 0;
+}
+
+int
+sys_cptgetstats(void)
+{
+  struct cpt_stats *u;
+  if(argptr(0, (void*)&u, sizeof(*u)) < 0)
+    return -1;
+
+  struct cpt_stats ks;
+  cpt_get_stats(&ks);
+  if(copyout(myproc()->pgdir, (uint)u, (char*)&ks, sizeof(ks)) < 0)
+    return -1;
+
+  return 0;
+}

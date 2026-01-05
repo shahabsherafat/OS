@@ -11,6 +11,9 @@
 #define CPT_LFU 2
 #define CPT_CLOCK 3
 
+static struct cpt_stats g_stats;
+static int stats_pid = -1;
+
 static int cpt_policy = CPT_LFU;
 static uint cpt_stamp = 1; // logical time for LRU/FIFO timestamps
 
@@ -153,38 +156,49 @@ cpt_get_slot_for_page(struct proc *p, uint vpn)
   char *kpage = user_va_page_to_kva(p, user_va_page);
   int slot;
 
-  if (kpage == 0)
+  if(kpage == 0)
     return -1;
 
   acquire(&g_cpt.lock);
 
-  // HIT
+  if(p->pid == stats_pid)
+    g_stats.accesses++;
+
+  // HIT?
   slot = cpt_lookup_nolock(p->pid, vpn);
-  if (slot >= 0)
-  {
+  if(slot >= 0){
+    if(p->pid == stats_pid)
+      g_stats.hits++;
     cpt_touch_slot_nolock(slot);
     release(&g_cpt.lock);
     return slot;
   }
 
-  // MISS: free?
+  // MISS
+  if(p->pid == stats_pid)
+    g_stats.misses++;
+
   slot = cpt_find_free_nolock();
 
-  // FULL: evict
-  if (slot < 0)
-    slot = cpt_pick_victim_nolock();
+  if(slot < 0){
+    // FULL => eviction
+    if(p->pid == stats_pid)
+      g_stats.evictions++;
 
-  // Load into chosen slot
+    slot = cpt_pick_victim_nolock();
+  }
+
   memmove(g_cpt.e[slot].frame, kpage, PGSIZE);
   g_cpt.e[slot].valid = 1;
-  g_cpt.e[slot].pid = p->pid;
-  g_cpt.e[slot].vpn = vpn;
+  g_cpt.e[slot].pid   = p->pid;
+  g_cpt.e[slot].vpn   = vpn;
 
   cpt_init_slot_meta_nolock(slot);
 
   release(&g_cpt.lock);
   return slot;
 }
+
 
 int cpt_read_int(struct proc *p, uint user_va, int *out)
 {
@@ -334,3 +348,50 @@ cpt_pick_victim_nolock(void)
     g_cpt.clock_hand = (h + 1) % CPT_SIZE;
   }
 }
+
+void
+cpt_set_policy(int policy)
+{
+  acquire(&g_cpt.lock);
+  cpt_policy = policy;
+  release(&g_cpt.lock);
+}
+
+void
+cpt_reset_stats(int pid)
+{
+  acquire(&g_cpt.lock);
+
+  // flush CPT entries for this pid for fair benchmarking
+  int i;
+  for(i = 0; i < CPT_SIZE; i++){
+    if(g_cpt.e[i].valid && g_cpt.e[i].pid == pid){
+      entry_reset(&g_cpt.e[i]);
+    }
+  }
+
+  // reset meta
+  g_cpt.clock_hand = 0;
+  cpt_stamp = 1;
+
+  // reset stats
+  stats_pid = pid;
+  g_stats.accesses = 0;
+  g_stats.hits = 0;
+  g_stats.misses = 0;
+  g_stats.evictions = 0;
+  g_stats.policy = cpt_policy;
+
+  release(&g_cpt.lock);
+}
+
+
+void
+cpt_get_stats(struct cpt_stats *out)
+{
+  acquire(&g_cpt.lock);
+  g_stats.policy = cpt_policy;
+  *out = g_stats;
+  release(&g_cpt.lock);
+}
+

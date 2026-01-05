@@ -29,6 +29,14 @@ struct cpt {
   int clock_hand; // used later by the CLOCK algorithm
 };
 
+struct cpt_stats {
+  int accesses;   // total requests
+  int hits;       // CPT hit
+  int misses;     // CPT miss
+  int evictions;  // when CPT was full and we replaced
+  int policy;     // current policy
+};
+
 void cpt_init(void);
 int  cpt_lookup(int pid, uint vpn);
 int  cpt_find_free(void);
@@ -39,4 +47,8 @@ void cpt_dump(void);
 int cpt_vread(struct proc *p, uint va, int *out);
 int cpt_vwrite(struct proc *p, uint va, int value);
 
+// kernel-side API
+void cpt_set_policy(int policy);
+void cpt_reset_stats(int pid);
+void cpt_get_stats(struct cpt_stats *out);
 #endif

@@ -47,6 +47,9 @@ SYSCALL(getlockstat)
 
 SYSCALL(vread)
 SYSCALL(vwrite)
+SYSCALL(cptsetpolicy)
+SYSCALL(cptresetstats)
+SYSCALL(cptgetstats)
 
 
 

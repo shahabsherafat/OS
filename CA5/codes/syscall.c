@@ -121,6 +121,9 @@ extern int sys_getlockstat(void);
 
 extern int sys_vread(void);
 extern int sys_vwrite(void);
+extern int sys_cptsetpolicy(void);
+extern int sys_cptresetstats(void);
+extern int sys_cptgetstats(void);
 
 
 
@@ -166,6 +169,9 @@ static int (*syscalls[])(void) = {
 
 [SYS_vread]   sys_vread,
 [SYS_vwrite]  sys_vwrite,
+[SYS_cptsetpolicy]  sys_cptsetpolicy,
+[SYS_cptresetstats] sys_cptresetstats,
+[SYS_cptgetstats]   sys_cptgetstats,
 
 
 

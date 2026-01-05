@@ -200,7 +200,7 @@ UPROGS=\
 	_plock_demo\
 	_locktest\
 	_vtest\
-
+	_cpttest\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

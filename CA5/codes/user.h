@@ -42,6 +42,19 @@ int getlockstat(uint *score);
 int vread(void *addr);
 int vwrite(void *addr, int value);
 
+struct cpt_stats {
+  int accesses;
+  int hits;
+  int misses;
+  int evictions;
+  int policy;
+};
+
+int cptsetpolicy(int);
+int cptresetstats(void);
+int cptgetstats(struct cpt_stats*);
+
+
 
 
 

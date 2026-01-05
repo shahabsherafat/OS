@@ -36,6 +36,10 @@
 #define SYS_getlockstat 35
 #define SYS_vread  36
 #define SYS_vwrite 37
+#define SYS_cptsetpolicy  38
+#define SYS_cptresetstats 39
+#define SYS_cptgetstats   40
+
 
 
 
