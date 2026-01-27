@@ -54,10 +54,6 @@ int cptsetpolicy(int);
 int cptresetstats(void);
 int cptgetstats(struct cpt_stats*);
 
-
-
-
-
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
